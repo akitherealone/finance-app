@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
+import { SpeedInsights } from "@vercel/speed-insights/next"
 
 import {
   PieChart,
