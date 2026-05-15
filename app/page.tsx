@@ -26,7 +26,10 @@ export default function Home() {
   const router = useRouter();
 
   const [user, setUser] = useState<any>(null);
+  const [loadingAuth, setLoadingAuth] = useState(true);
+
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loadingData, setLoadingData] = useState(false);
 
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
@@ -44,34 +47,41 @@ export default function Home() {
   ]);
 
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
 
   const COLORS = ["#FF4D4D", "#4DA6FF", "#4DFF88", "#FFB84D", "#B84DFF"];
 
-  // AUTH
+  // =====================
+  // AUTH (FIXED)
+  // =====================
   useEffect(() => {
-    const init = async () => {
+    const checkUser = async () => {
+      setLoadingAuth(true);
+
       const { data } = await supabase.auth.getSession();
 
       if (!data.session) {
-        router.push("/login");
+        router.replace("/login");
         return;
       }
 
       setUser(data.session.user);
+      setLoadingAuth(false);
     };
 
-    init();
-  }, []);
+    checkUser();
+  }, [router]);
 
-  // FETCH
+  // =====================
+  // FETCH TRANSACTIONS
+  // =====================
   useEffect(() => {
-    if (user) fetchTransactions();
+    if (!user) return;
+    fetchTransactions();
   }, [user]);
 
   async function fetchTransactions() {
-    setLoading(true);
+    setLoadingData(true);
 
     const { data } = await supabase
       .from("transactions")
@@ -80,16 +90,20 @@ export default function Home() {
       .order("created_at", { ascending: false });
 
     setTransactions(data ?? []);
-    setLoading(false);
+    setLoadingData(false);
   }
 
+  // =====================
   // LOGOUT
+  // =====================
   async function logout() {
     await supabase.auth.signOut();
-    router.push("/login");
+    router.replace("/login");
   }
 
+  // =====================
   // ADD / EDIT
+  // =====================
   async function addTransaction() {
     if (!title.trim() || !amount.trim()) return;
 
@@ -141,7 +155,9 @@ export default function Home() {
     setType("expense");
   }
 
+  // =====================
   // DELETE
+  // =====================
   async function deleteTransaction(id: number) {
     await supabase
       .from("transactions")
@@ -152,7 +168,6 @@ export default function Home() {
     setTransactions((prev) => prev.filter((t) => t.id !== id));
   }
 
-  // EDIT
   function editTransaction(t: Transaction) {
     setTitle(t.title);
     setAmount(t.amount.toString());
@@ -161,14 +176,21 @@ export default function Home() {
     setEditingId(t.id);
   }
 
-  // CATEGORY
   function addCategory() {
     if (!customCategory.trim()) return;
     setCategories((prev) => [...prev, customCategory]);
     setCustomCategory("");
   }
 
-  // TOTALS
+  // =====================
+  // LOADING GUARD (IMPORTANT FIX)
+  // =====================
+  if (loadingAuth) return <main>Loading session...</main>;
+  if (!user) return null;
+
+  // =====================
+  // CALCULATIONS
+  // =====================
   const income = transactions
     .filter((t) => t.type === "income")
     .reduce((sum, t) => sum + t.amount, 0);
@@ -179,7 +201,6 @@ export default function Home() {
 
   const balance = income + expenses;
 
-  // CHART DATA
   const categoryData = Object.values(
     transactions.reduce((acc, t) => {
       if (!acc[t.category]) {
@@ -194,11 +215,11 @@ export default function Home() {
     }, {} as Record<string, { name: string; value: number }>)
   );
 
-  if (!user) return <main>Loading...</main>;
-
+  // =====================
+  // UI
+  // =====================
   return (
     <main style={{ padding: 30, fontFamily: "Arial" }}>
-
       {/* HEADER */}
       <div style={{ display: "flex", justifyContent: "space-between" }}>
         <h1>Finance Tracker</h1>
@@ -229,11 +250,8 @@ export default function Home() {
           flexDirection: fullscreen ? "column" : "row",
         }}
       >
-
         {/* LEFT */}
         <div style={{ flex: fullscreen ? 1 : 2 }}>
-
-          {/* CATEGORY */}
           <div>
             <input
               placeholder="New category"
@@ -243,20 +261,17 @@ export default function Home() {
             <button onClick={addCategory}>Add</button>
           </div>
 
-          {/* INPUT */}
           <div style={{ marginTop: 10 }}>
             <input
               placeholder="Title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && addTransaction()}
             />
 
             <input
               placeholder="Amount"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && addTransaction()}
             />
 
             <select value={type} onChange={(e) => setType(e.target.value as any)}>
@@ -275,8 +290,9 @@ export default function Home() {
             </button>
           </div>
 
-          {/* LIST */}
           <div style={{ marginTop: 20 }}>
+            {loadingData && <p>Loading transactions...</p>}
+
             {transactions.map((t) => (
               <div key={t.id} style={{ marginBottom: 10 }}>
                 <strong>{t.title}</strong>
@@ -285,7 +301,10 @@ export default function Home() {
                 </p>
 
                 <button onClick={() => editTransaction(t)}>Edit</button>
-                <button onClick={() => deleteTransaction(t.id)} style={{ color: "red" }}>
+                <button
+                  onClick={() => deleteTransaction(t.id)}
+                  style={{ color: "red" }}
+                >
                   Delete
                 </button>
               </div>
@@ -301,7 +320,13 @@ export default function Home() {
             <div style={{ width: "100%", height: 300 }}>
               <ResponsiveContainer>
                 <PieChart>
-                  <Pie data={categoryData} dataKey="value" nameKey="name" outerRadius={120} label>
+                  <Pie
+                    data={categoryData}
+                    dataKey="value"
+                    nameKey="name"
+                    outerRadius={120}
+                    label
+                  >
                     {categoryData.map((_, i) => (
                       <Cell key={i} fill={COLORS[i % COLORS.length]} />
                     ))}
@@ -312,7 +337,6 @@ export default function Home() {
             </div>
           </div>
         )}
-
       </div>
     </main>
   );
