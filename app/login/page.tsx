@@ -25,8 +25,12 @@ type Transaction = {
 export default function Home() {
   const router = useRouter();
 
+  // =====================
+  // STATE
+  // =====================
   const [user, setUser] = useState<any>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
@@ -44,54 +48,64 @@ export default function Home() {
   ]);
 
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
 
   const COLORS = ["#FF4D4D", "#4DA6FF", "#4DFF88", "#FFB84D", "#B84DFF"];
 
+  // =====================
   // AUTH
+  // =====================
   useEffect(() => {
     const init = async () => {
-      const { data } = await supabase.auth.getSession();
+      const { data, error } = await supabase.auth.getSession();
 
-      if (!data.session) {
+      if (error || !data.session) {
+        setLoading(false);
         router.push("/login");
         return;
       }
 
       setUser(data.session.user);
+      setLoading(false);
     };
 
     init();
   }, []);
 
+  // =====================
   // FETCH
+  // =====================
   useEffect(() => {
-    if (user) fetchTransactions();
+    if (user?.id) fetchTransactions();
   }, [user]);
 
   async function fetchTransactions() {
     setLoading(true);
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("transactions")
       .select("*")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
-    setTransactions(data ?? []);
+    if (!error) setTransactions(data ?? []);
+
     setLoading(false);
   }
 
+  // =====================
   // LOGOUT
+  // =====================
   async function logout() {
     await supabase.auth.signOut();
     router.push("/login");
   }
 
+  // =====================
   // ADD / EDIT
+  // =====================
   async function addTransaction() {
-    if (!title.trim() || !amount.trim()) return;
+    if (!title.trim() || !amount.trim() || !user?.id) return;
 
     const amountNumber = Number(amount);
     if (Number.isNaN(amountNumber)) return;
@@ -100,7 +114,7 @@ export default function Home() {
       const { data } = await supabase
         .from("transactions")
         .update({
-          title,
+          title: title.trim(),
           amount: amountNumber,
           category,
           type,
@@ -121,7 +135,7 @@ export default function Home() {
         .from("transactions")
         .insert([
           {
-            title,
+            title: title.trim(),
             amount: amountNumber,
             category,
             type,
@@ -141,7 +155,9 @@ export default function Home() {
     setType("expense");
   }
 
+  // =====================
   // DELETE
+  // =====================
   async function deleteTransaction(id: number) {
     await supabase
       .from("transactions")
@@ -152,7 +168,9 @@ export default function Home() {
     setTransactions((prev) => prev.filter((t) => t.id !== id));
   }
 
+  // =====================
   // EDIT
+  // =====================
   function editTransaction(t: Transaction) {
     setTitle(t.title);
     setAmount(t.amount.toString());
@@ -161,41 +179,59 @@ export default function Home() {
     setEditingId(t.id);
   }
 
+  // =====================
   // CATEGORY
+  // =====================
   function addCategory() {
     if (!customCategory.trim()) return;
     setCategories((prev) => [...prev, customCategory]);
     setCustomCategory("");
   }
 
-  // TOTALS
+  // =====================
+  // TOTALS (SAFE)
+  // =====================
   const income = transactions
     .filter((t) => t.type === "income")
-    .reduce((sum, t) => sum + t.amount, 0);
+    .reduce((sum, t) => sum + Number(t.amount), 0);
 
   const expenses = transactions
     .filter((t) => t.type === "expense")
-    .reduce((sum, t) => sum + t.amount, 0);
+    .reduce((sum, t) => sum + Number(t.amount), 0);
 
   const balance = income + expenses;
 
-  // CHART DATA
+  // =====================
+  // CHART DATA (SAFE)
+  // =====================
   const categoryData = Object.values(
     transactions.reduce((acc, t) => {
+      if (t.type !== "expense") return acc;
+
       if (!acc[t.category]) {
         acc[t.category] = { name: t.category, value: 0 };
       }
 
-      if (t.type === "expense") {
-        acc[t.category].value += t.amount;
-      }
+      acc[t.category].value += Number(t.amount);
 
       return acc;
     }, {} as Record<string, { name: string; value: number }>)
   );
 
-  if (!user) return <main>Loading...</main>;
+  // =====================
+  // LOADING STATE
+  // =====================
+  if (loading) {
+    return <main style={{ padding: 30 }}>Loading...</main>;
+  }
 
+  if (!user) {
+    return <main style={{ padding: 30 }}>Redirecting...</main>;
+  }
+
+  // =====================
+  // UI
+  // =====================
   return (
     <main style={{ padding: 30, fontFamily: "Arial" }}>
 
@@ -216,8 +252,8 @@ export default function Home() {
       <div style={{ marginTop: 20, padding: 15, border: "1px solid #ddd" }}>
         <h2>Overview</h2>
         <p>💰 Balance: ₱{balance}</p>
-        <p style={{ color: "green" }}>📈 Income: ₱{income}</p>
-        <p style={{ color: "red" }}>📉 Expenses: ₱{expenses}</p>
+        <p style={{ color: "#16a34a" }}>📈 Income: ₱{income}</p>
+        <p style={{ color: "#dc2626" }}>📉 Expenses: ₱{expenses}</p>
       </div>
 
       {/* LAYOUT */}
@@ -280,7 +316,8 @@ export default function Home() {
             {transactions.map((t) => (
               <div key={t.id} style={{ marginBottom: 10 }}>
                 <strong>{t.title}</strong>
-                <p style={{ color: t.type === "income" ? "green" : "red" }}>
+
+                <p style={{ color: t.type === "income" ? "#16a34a" : "#dc2626" }}>
                   ₱{t.amount} ({t.category})
                 </p>
 
