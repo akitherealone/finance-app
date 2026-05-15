@@ -52,24 +52,45 @@ export default function Home() {
   const COLORS = ["#FF4D4D", "#4DA6FF", "#4DFF88", "#FFB84D", "#B84DFF"];
 
   // =====================
-  // AUTH (FIXED)
+  // AUTH (FIXED - NO LOOP)
   // =====================
   useEffect(() => {
-    const checkUser = async () => {
+    let mounted = true;
+
+    const initAuth = async () => {
       setLoadingAuth(true);
 
       const { data } = await supabase.auth.getSession();
 
-      if (!data.session) {
+      if (!mounted) return;
+
+      if (data.session?.user) {
+        setUser(data.session.user);
+      } else {
         router.replace("/login");
-        return;
       }
 
-      setUser(data.session.user);
       setLoadingAuth(false);
     };
 
-    checkUser();
+    initAuth();
+
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        if (!mounted) return;
+
+        if (session?.user) {
+          setUser(session.user);
+        } else {
+          router.replace("/login");
+        }
+      }
+    );
+
+    return () => {
+      mounted = false;
+      listener.subscription.unsubscribe();
+    };
   }, [router]);
 
   // =====================
@@ -183,7 +204,7 @@ export default function Home() {
   }
 
   // =====================
-  // LOADING GUARD (IMPORTANT FIX)
+  // LOADING GUARD (IMPORTANT)
   // =====================
   if (loadingAuth) return <main>Loading session...</main>;
   if (!user) return null;
@@ -220,7 +241,6 @@ export default function Home() {
   // =====================
   return (
     <main style={{ padding: 30, fontFamily: "Arial" }}>
-      {/* HEADER */}
       <div style={{ display: "flex", justifyContent: "space-between" }}>
         <h1>Finance Tracker</h1>
 
@@ -233,7 +253,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* OVERVIEW */}
       <div style={{ marginTop: 20, padding: 15, border: "1px solid #ddd" }}>
         <h2>Overview</h2>
         <p>💰 Balance: ₱{balance}</p>
@@ -241,7 +260,6 @@ export default function Home() {
         <p style={{ color: "red" }}>📉 Expenses: ₱{expenses}</p>
       </div>
 
-      {/* LAYOUT */}
       <div
         style={{
           display: "flex",
@@ -250,7 +268,6 @@ export default function Home() {
           flexDirection: fullscreen ? "column" : "row",
         }}
       >
-        {/* LEFT */}
         <div style={{ flex: fullscreen ? 1 : 2 }}>
           <div>
             <input
@@ -301,10 +318,7 @@ export default function Home() {
                 </p>
 
                 <button onClick={() => editTransaction(t)}>Edit</button>
-                <button
-                  onClick={() => deleteTransaction(t.id)}
-                  style={{ color: "red" }}
-                >
+                <button onClick={() => deleteTransaction(t.id)} style={{ color: "red" }}>
                   Delete
                 </button>
               </div>
@@ -312,7 +326,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* RIGHT */}
         {!fullscreen && (
           <div style={{ flex: 1, borderLeft: "1px solid #ddd", paddingLeft: 20 }}>
             <h2>Analytics</h2>
@@ -340,4 +353,4 @@ export default function Home() {
       </div>
     </main>
   );
-} 
+}
