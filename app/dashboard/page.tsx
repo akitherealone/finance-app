@@ -248,7 +248,7 @@ export default function Home() {
   return (
     <main style={{ height: "100vh", display: "flex", flexDirection: "column", fontFamily: "Arial" }}>
 
-      {/* HEADER (fixed) */}
+      {/* HEADER */}
       <div style={{ padding: 20, display: "flex", justifyContent: "space-between", borderBottom: "1px solid #ddd" }}>
         <h1>Finance Tracker</h1>
 
@@ -261,38 +261,46 @@ export default function Home() {
       {/* BODY */}
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
 
-        {/* LEFT SIDE */}
+        {/* LEFT SIDE (NOW TRANSACTION FIRST) */}
         <div style={{ flex: 2, padding: 20, overflowY: "auto" }}>
 
-          <h2>Overview</h2>
-          <p>💰 Balance: ₱{balance}</p>
-          <p style={{ color: "green" }}>📈 Income: ₱{income}</p>
-          <p style={{ color: "red" }}>📉 Expenses: ₱{expenses}</p>
+          {/* TRANSACTIONS SECTION (SWAPPED + FIXED COLORS) */}
+          <div style={{ background: "#2b2b2b", padding: 15, borderRadius: 10, color: "white" }}>
+            <h2>Transactions</h2>
 
-          {/* TRANSACTIONS (scrollable) */}
-          <div style={{ marginTop: 20 }}>
-            {loadingData && <p>Loading...</p>}
+            <div style={{ marginTop: 20 }}>
+              {loadingData && <p>Loading...</p>}
 
-            {transactions.map((t) => (
-              <div key={t.id} style={{ marginBottom: 10 }}>
-                <strong>{t.title}</strong>
-                <p style={{ color: t.type === "income" ? "green" : "red" }}>
-                  ₱{t.amount} ({t.category})
-                </p>
+              {transactions.map((t) => (
+                <div key={t.id} style={{ marginBottom: 10 }}>
+                  <strong>{t.title}</strong>
+                  <p style={{ color: t.type === "income" ? "#4ade80" : "#f87171" }}>
+                    ₱{t.amount} ({t.category})
+                  </p>
 
-                <button onClick={() => editTransaction(t)}>Edit</button>
-                <button onClick={() => deleteTransaction(t.id)} style={{ color: "red" }}>
-                  Delete
-                </button>
-              </div>
-            ))}
+                  <button onClick={() => editTransaction(t)}>Edit</button>
+                  <button onClick={() => deleteTransaction(t.id)} style={{ color: "red" }}>
+                    Delete
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
+
+          {/* OVERVIEW (NOW BELOW TRANSACTIONS) */}
+          <div style={{ marginTop: 20 }}>
+            <h2>Overview</h2>
+            <p>💰 Balance: ₱{balance}</p>
+            <p style={{ color: "green" }}>📈 Income: ₱{income}</p>
+            <p style={{ color: "red" }}>📉 Expenses: ₱{expenses}</p>
+          </div>
+
         </div>
 
         {/* RIGHT SIDE */}
         <div style={{ flex: 1, borderLeft: "1px solid #ddd", padding: 20, display: "flex", flexDirection: "column", gap: 20 }}>
 
-          {/* FLOATING INPUT CARD */}
+          {/* FLOATING INPUT CARD (UNCHANGED LOGIC) */}
           <div style={{ padding: 15, border: "1px solid #ddd", borderRadius: 10, position: "sticky", top: 10, background: "white" }}>
 
             <input
@@ -330,7 +338,7 @@ export default function Home() {
               <PieChart>
                 <Pie data={incomeData} dataKey="value" nameKey="name" label>
                   {incomeData.map((_, i) => (
-                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                    <Cell key={i} fill={["#FF4D4D", "#4DA6FF", "#4DFF88", "#FFB84D", "#B84DFF"][i % 5]} />
                   ))}
                 </Pie>
                 <Tooltip />
@@ -342,7 +350,7 @@ export default function Home() {
               <PieChart>
                 <Pie data={expenseData} dataKey="value" nameKey="name" label>
                   {expenseData.map((_, i) => (
-                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                    <Cell key={i} fill={["#FF4D4D", "#4DA6FF", "#4DFF88", "#FFB84D", "#B84DFF"][i % 5]} />
                   ))}
                 </Pie>
                 <Tooltip />
