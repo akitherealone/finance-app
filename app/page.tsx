@@ -51,47 +51,49 @@ export default function Home() {
 
   const COLORS = ["#FF4D4D", "#4DA6FF", "#4DFF88", "#FFB84D", "#B84DFF"];
 
-  // =====================
-  // AUTH (FIXED - NO LOOP)
-  // =====================
-  useEffect(() => {
-    let mounted = true;
+// =====================
+// AUTH (FINAL FIX)
+// =====================
+useEffect(() => {
+  let mounted = true;
 
-    const initAuth = async () => {
-      setLoadingAuth(true);
+  const initAuth = async () => {
+    setLoadingAuth(true);
 
-      const { data } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
 
-      if (!mounted) return;
+    if (!mounted) return;
 
-      if (data.session?.user) {
-        setUser(data.session.user);
-      } else {
-        router.replace("/login");
-      }
+    if (session?.user) {
+      setUser(session.user);
+    } else {
+      setUser(null);
+    }
 
-      setLoadingAuth(false);
-    };
+    setLoadingAuth(false);
+  };
 
-    initAuth();
+  initAuth();
 
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        if (!mounted) return;
+  const {
+    data: { subscription },
+  } = supabase.auth.onAuthStateChange((_event, session) => {
+    if (!mounted) return;
 
-        if (session?.user) {
-          setUser(session.user);
-        } else {
-          router.replace("/login");
-        }
-      }
-    );
+    if (session?.user) {
+      setUser(session.user);
+    } else {
+      setUser(null);
+    }
+  });
 
-    return () => {
-      mounted = false;
-      listener.subscription.unsubscribe();
-    };
-  }, [router]);
+  return () => {
+    mounted = false;
+    subscription.unsubscribe();
+  };
+}, []);
 
   // =====================
   // FETCH TRANSACTIONS
