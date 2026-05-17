@@ -18,6 +18,8 @@ type Transaction = {
   amount: number;
   category: string;
   type: "income" | "expense";
+  created_at?: string;
+  user_id?: string;
 };
 
 export default function Home() {
@@ -45,39 +47,25 @@ export default function Home() {
   ]);
 
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [fullscreen, setFullscreen] = useState(false);
-
-  // ================= CHART CUSTOMIZATION =================
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [colorPickerOpen, setColorPickerOpen] = useState(false);
-
-  const [categoryColors, setCategoryColors] = useState<Record<string, string>>(
-    {}
-  );
 
   const COLORS = ["#FF4D4D", "#4DA6FF", "#4DFF88", "#FFB84D", "#B84DFF"];
 
-  function getColor(category: string, index: number) {
-    return categoryColors[category] || COLORS[index % COLORS.length];
-  }
-
-  function setCategoryColor(cat: string, color: string) {
-    setCategoryColors((prev) => ({
-      ...prev,
-      [cat]: color,
-    }));
-  }
-
-  // ================= AUTH =================
+  // =====================
+  // AUTH
+  // =====================
   useEffect(() => {
     let mounted = true;
 
     const initAuth = async () => {
-      const { data } = await supabase.auth.getSession();
+      setLoadingAuth(true);
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
       if (!mounted) return;
 
-      setUser(data.session?.user ?? null);
+      setUser(session?.user ?? null);
       setLoadingAuth(false);
     };
 
@@ -96,78 +84,150 @@ export default function Home() {
     };
   }, []);
 
-  // ================= FETCH =================
+  // =====================
+  // FETCH
+  // =====================
   useEffect(() => {
     if (!user) return;
-
-    async function fetchTransactions() {
-      setLoadingData(true);
-
-      const { data } = await supabase
-        .from("transactions")
-        .select("*")
-        .eq("user_id", user.id);
-
-      setTransactions(data ?? []);
-      setLoadingData(false);
-    }
-
     fetchTransactions();
   }, [user]);
 
-  // ================= LOGOUT =================
+  async function fetchTransactions() {
+    setLoadingData(true);
+
+    const { data } = await supabase
+      .from("transactions")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
+
+    setTransactions(data ?? []);
+    setLoadingData(false);
+  }
+
+  // =====================
+  // LOGOUT
+  // =====================
   async function logout() {
     await supabase.auth.signOut();
     router.replace("/login");
   }
 
-  // ================= ADD =================
+  // =====================
+  // ADD / EDIT
+  // =====================
   async function addTransaction() {
     if (!title.trim() || !amount.trim()) return;
 
     const amountNumber = Number(amount);
+    if (Number.isNaN(amountNumber)) return;
 
-    const { data } = await supabase
-      .from("transactions")
-      .insert([
-        {
+    if (editingId !== null) {
+      const { data } = await supabase
+        .from("transactions")
+        .update({
           title,
           amount: amountNumber,
           category,
           type,
-          user_id: user.id,
-        },
-      ])
-      .select();
+        })
+        .eq("id", editingId)
+        .eq("user_id", user.id)
+        .select();
 
-    if (data?.[0]) {
-      setTransactions((prev) => [data[0], ...prev]);
+      if (data?.[0]) {
+        setTransactions((prev) =>
+          prev.map((t) => (t.id === editingId ? data[0] : t))
+        );
+      }
+
+      setEditingId(null);
+    } else {
+      const { data } = await supabase
+        .from("transactions")
+        .insert([
+          {
+            title,
+            amount: amountNumber,
+            category,
+            type,
+            user_id: user.id,
+          },
+        ])
+        .select();
+
+      if (data?.[0]) {
+        setTransactions((prev) => [data[0], ...prev]);
+      }
     }
 
     setTitle("");
     setAmount("");
+    setCategory("Food");
+    setType("expense");
   }
 
-  // ================= DELETE =================
+  // =====================
+  // DELETE
+  // =====================
   async function deleteTransaction(id: number) {
-    await supabase.from("transactions").delete().eq("id", id);
-    setTransactions((p) => p.filter((t) => t.id !== id));
+    await supabase
+      .from("transactions")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", user.id);
+
+    setTransactions((prev) => prev.filter((t) => t.id !== id));
   }
 
-  // ================= LOADING =================
+  function editTransaction(t: Transaction) {
+    setTitle(t.title);
+    setAmount(t.amount.toString());
+    setCategory(t.category);
+    setType(t.type);
+    setEditingId(t.id);
+  }
+
+  function addCategory() {
+    if (!customCategory.trim()) return;
+    setCategories((prev) => [...prev, customCategory]);
+    setCustomCategory("");
+  }
+
+  // =====================
+  // LOADING GUARD
+  // =====================
   if (loadingAuth) return <main>Loading session...</main>;
   if (!user) return null;
 
-  // ================= CALCULATIONS =================
+  // =====================
+  // CALCULATIONS
+  // =====================
   const income = transactions
     .filter((t) => t.type === "income")
-    .reduce((s, t) => s + t.amount, 0);
+    .reduce((sum, t) => sum + t.amount, 0);
 
   const expenses = transactions
     .filter((t) => t.type === "expense")
-    .reduce((s, t) => s + t.amount, 0);
+    .reduce((sum, t) => sum + t.amount, 0);
 
   const balance = income - expenses;
+
+  // =====================
+  // CHART DATA
+  // =====================
+  const incomeData = Object.values(
+    transactions.reduce((acc, t) => {
+      if (t.type !== "income") return acc;
+
+      if (!acc[t.category]) {
+        acc[t.category] = { name: t.category, value: 0 };
+      }
+
+      acc[t.category].value += Number(t.amount);
+      return acc;
+    }, {} as Record<string, { name: string; value: number }>)
+  );
 
   const expenseData = Object.values(
     transactions.reduce((acc, t) => {
@@ -177,173 +237,118 @@ export default function Home() {
         acc[t.category] = { name: t.category, value: 0 };
       }
 
-      acc[t.category].value += t.amount;
+      acc[t.category].value += Number(t.amount);
       return acc;
     }, {} as Record<string, { name: string; value: number }>)
   );
 
-  const renderLabel = (entry: any) => entry.name;
-
-  // ================= UI =================
+  // =====================
+  // UI
+  // =====================
   return (
-    <main style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
+    <main style={{ height: "100vh", display: "flex", flexDirection: "column", fontFamily: "Arial" }}>
 
-      {/* HEADER (UNCHANGED STRUCTURE) */}
-      <div style={{
-        display: "flex",
-        justifyContent: "space-between",
-        padding: 20,
-        borderBottom: "1px solid #ddd",
-      }}>
-        <h2>Finance Tracker</h2>
+      {/* HEADER (fixed) */}
+      <div style={{ padding: 20, display: "flex", justifyContent: "space-between", borderBottom: "1px solid #ddd" }}>
+        <h1>Finance Tracker</h1>
 
         <div style={{ display: "flex", gap: 10 }}>
-          <span>{user.email}</span>
+          <p>{user.email}</p>
           <button onClick={logout}>Logout</button>
-          <button onClick={() => setFullscreen(p => !p)}>
-            {fullscreen ? "Exit Focus" : "Focus Mode"}
-          </button>
         </div>
       </div>
 
       {/* BODY */}
-      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
 
-        {/* LEFT - FLOATING OVERVIEW + CHART */}
-        <div style={{
-          width: 420,
-          borderRight: "1px solid #ddd",
-          padding: 20,
-          overflow: "hidden"
-        }}>
+        {/* LEFT SIDE */}
+        <div style={{ flex: 2, padding: 20, overflowY: "auto" }}>
 
-          {/* OVERVIEW (UNCHANGED) */}
-          <div style={{ marginBottom: 20 }}>
-            <h3>Overview</h3>
-            <p>Balance: ₱{balance}</p>
-            <p style={{ color: "green" }}>Income: ₱{income}</p>
-            <p style={{ color: "red" }}>Expenses: ₱{expenses}</p>
-          </div>
+          <h2>Overview</h2>
+          <p>💰 Balance: ₱{balance}</p>
+          <p style={{ color: "green" }}>📈 Income: ₱{income}</p>
+          <p style={{ color: "red" }}>📉 Expenses: ₱{expenses}</p>
 
-          {/* CHART HEADER */}
-          <div style={{ position: "relative" }}>
-            <h3>Expenses</h3>
+          {/* TRANSACTIONS (scrollable) */}
+          <div style={{ marginTop: 20 }}>
+            {loadingData && <p>Loading...</p>}
 
-            {/* 3 DOT MENU */}
-            <div
-              style={{ position: "absolute", right: 0, top: 0, cursor: "pointer" }}
-              onClick={() => setMenuOpen(p => !p)}
-            >
-              ⋮
-            </div>
+            {transactions.map((t) => (
+              <div key={t.id} style={{ marginBottom: 10 }}>
+                <strong>{t.title}</strong>
+                <p style={{ color: t.type === "income" ? "green" : "red" }}>
+                  ₱{t.amount} ({t.category})
+                </p>
 
-            {menuOpen && (
-              <div style={{
-                position: "absolute",
-                right: 0,
-                top: 25,
-                background: "white",
-                border: "1px solid #ddd",
-                padding: 10,
-                zIndex: 10
-              }}>
-                <button onClick={() => setColorPickerOpen(true)}>
-                  Customize Colors
+                <button onClick={() => editTransaction(t)}>Edit</button>
+                <button onClick={() => deleteTransaction(t.id)} style={{ color: "red" }}>
+                  Delete
                 </button>
               </div>
-            )}
+            ))}
+          </div>
+        </div>
+
+        {/* RIGHT SIDE */}
+        <div style={{ flex: 1, borderLeft: "1px solid #ddd", padding: 20, display: "flex", flexDirection: "column", gap: 20 }}>
+
+          {/* FLOATING INPUT CARD */}
+          <div style={{ padding: 15, border: "1px solid #ddd", borderRadius: 10, position: "sticky", top: 10, background: "white" }}>
+
+            <input
+              placeholder="New category"
+              value={customCategory}
+              onChange={(e) => setCustomCategory(e.target.value)}
+            />
+            <button onClick={addCategory}>Add</button>
+
+            <div style={{ marginTop: 10 }}>
+              <input placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
+              <input placeholder="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
+
+              <select value={type} onChange={(e) => setType(e.target.value as any)}>
+                <option value="expense">Expense</option>
+                <option value="income">Income</option>
+              </select>
+
+              <select value={category} onChange={(e) => setCategory(e.target.value)}>
+                {categories.map((c) => (
+                  <option key={c}>{c}</option>
+                ))}
+              </select>
+
+              <button onClick={addTransaction}>
+                {editingId ? "Save Edit" : "Add"}
+              </button>
+            </div>
           </div>
 
-          {/* COLOR PICKER */}
-          {colorPickerOpen && (
-            <div style={{
-              position: "fixed",
-              top: "30%",
-              left: "40%",
-              background: "white",
-              padding: 20,
-              border: "1px solid #ccc",
-              zIndex: 20
-            }}>
-              <h4>Category Colors</h4>
-
-              {expenseData.map((d, i) => (
-                <div key={d.name} style={{ marginBottom: 10 }}>
-                  <span>{d.name}</span>
-                  <input
-                    type="color"
-                    value={categoryColors[d.name] || COLORS[i % COLORS.length]}
-                    onChange={(e) => setCategoryColor(d.name, e.target.value)}
-                  />
-                </div>
-              ))}
-
-              <button onClick={() => setColorPickerOpen(false)}>Close</button>
-            </div>
-          )}
-
-          {/* PIE CHART */}
-          <div style={{ width: "100%", height: 280 }}>
-            <ResponsiveContainer>
+          {/* ANALYTICS */}
+          <div>
+            <h3>Income</h3>
+            <ResponsiveContainer width="100%" height={200}>
               <PieChart>
-                <Pie
-                  data={expenseData}
-                  dataKey="value"
-                  nameKey="name"
-                  outerRadius={110}
-                  label={renderLabel} // CATEGORY ONLY
-                >
-                  {expenseData.map((e, i) => (
-                    <Cell
-                      key={e.name}
-                      fill={getColor(e.name, i)}
-                    />
+                <Pie data={incomeData} dataKey="value" nameKey="name" label>
+                  {incomeData.map((_, i) => (
+                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}
                 </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
 
-                {/* ONLY AMOUNT ON HOVER */}
-                <Tooltip formatter={(v: any) => [`₱${v}`, "Amount"]} />
+            <h3 style={{ marginTop: 20 }}>Expenses</h3>
+            <ResponsiveContainer width="100%" height={200}>
+              <PieChart>
+                <Pie data={expenseData} dataKey="value" nameKey="name" label>
+                  {expenseData.map((_, i) => (
+                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip />
               </PieChart>
             </ResponsiveContainer>
           </div>
-
-        </div>
-
-        {/* RIGHT - TRANSACTIONS (UNCHANGED STRUCTURE) */}
-        <div style={{ flex: 1, padding: 20, overflowY: "auto" }}>
-
-          <h3>Add Transaction</h3>
-
-          <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Title" />
-          <input value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount" />
-
-          <select value={type} onChange={e => setType(e.target.value as any)}>
-            <option value="expense">Expense</option>
-            <option value="income">Income</option>
-          </select>
-
-          <select value={category} onChange={e => setCategory(e.target.value)}>
-            <option>Food</option>
-            <option>Transport</option>
-            <option>School</option>
-            <option>Savings</option>
-            <option>Entertainment</option>
-            <option>Other</option>
-          </select>
-
-          <button onClick={addTransaction}>Add</button>
-
-          <hr style={{ margin: "20px 0" }} />
-
-          <h3>History</h3>
-
-          {transactions.map(t => (
-            <div key={t.id}>
-              <b>{t.title}</b>
-              <p>₱{t.amount} ({t.category})</p>
-              <button onClick={() => deleteTransaction(t.id)}>Delete</button>
-            </div>
-          ))}
 
         </div>
       </div>
