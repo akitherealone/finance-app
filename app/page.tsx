@@ -209,6 +209,7 @@ useEffect(() => {
   // LOADING GUARD (IMPORTANT)
   // =====================
   if (loadingAuth) return <main>Loading session...</main>;
+  console.log("AUTH USER:", user);
   if (!user) return null;
 
   // =====================
