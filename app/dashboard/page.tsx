@@ -18,8 +18,6 @@ type Transaction = {
   amount: number;
   category: string;
   type: "income" | "expense";
-  created_at?: string;
-  user_id?: string;
 };
 
 export default function Home() {
@@ -49,9 +47,11 @@ export default function Home() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
 
-  // =====================
-  // 🎨 CHART CUSTOMIZATION STATE
-  // =====================
+  const [menuOpen, setMenuOpen] = useState<null | "income" | "expense">(null);
+  const [colorPicker, setColorPicker] = useState<{
+    type: "income" | "expense";
+  } | null>(null);
+
   const [incomeColors, setIncomeColors] = useState([
     "#4DA6FF",
     "#4DFF88",
@@ -66,36 +66,25 @@ export default function Home() {
     "#FFB84D",
   ]);
 
-  const [activeMenu, setActiveMenu] = useState<null | "income" | "expense">(null);
-  const [colorPicker, setColorPicker] = useState<{
-    type: "income" | "expense";
-    index: number;
-  } | null>(null);
-
   // =====================
   // AUTH
   // =====================
   useEffect(() => {
     let mounted = true;
 
-    const initAuth = async () => {
-      setLoadingAuth(true);
-
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
+    const init = async () => {
+      const { data } = await supabase.auth.getSession();
       if (!mounted) return;
 
-      setUser(session?.user ?? null);
+      setUser(data.session?.user ?? null);
       setLoadingAuth(false);
     };
 
-    initAuth();
+    init();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((_e, session) => {
       if (!mounted) return;
       setUser(session?.user ?? null);
     });
@@ -128,38 +117,25 @@ export default function Home() {
   }
 
   // =====================
-  // LOGOUT
-  // =====================
-  async function logout() {
-    await supabase.auth.signOut();
-    router.replace("/login");
-  }
-
-  // =====================
-  // ADD / EDIT
+  // CRUD
   // =====================
   async function addTransaction() {
-    if (!title.trim() || !amount.trim()) return;
+    if (!title || !amount) return;
 
-    const amountNumber = Number(amount);
-    if (Number.isNaN(amountNumber)) return;
+    const num = Number(amount);
+    if (Number.isNaN(num)) return;
 
     if (editingId !== null) {
       const { data } = await supabase
         .from("transactions")
-        .update({
-          title,
-          amount: amountNumber,
-          category,
-          type,
-        })
+        .update({ title, amount: num, category, type })
         .eq("id", editingId)
         .eq("user_id", user.id)
         .select();
 
       if (data?.[0]) {
-        setTransactions((prev) =>
-          prev.map((t) => (t.id === editingId ? data[0] : t))
+        setTransactions((p) =>
+          p.map((t) => (t.id === editingId ? data[0] : t))
         );
       }
 
@@ -167,31 +143,21 @@ export default function Home() {
     } else {
       const { data } = await supabase
         .from("transactions")
-        .insert([
-          {
-            title,
-            amount: amountNumber,
-            category,
-            type,
-            user_id: user.id,
-          },
-        ])
+        .insert([{ title, amount: num, category, type, user_id: user.id }])
         .select();
 
       if (data?.[0]) {
-        setTransactions((prev) => [data[0], ...prev]);
+        setTransactions((p) => [data[0], ...p]);
       }
     }
 
     setTitle("");
     setAmount("");
-    setCategory("Food");
-    setType("expense");
   }
 
   async function deleteTransaction(id: number) {
     await supabase.from("transactions").delete().eq("id", id).eq("user_id", user.id);
-    setTransactions((prev) => prev.filter((t) => t.id !== id));
+    setTransactions((p) => p.filter((t) => t.id !== id));
   }
 
   function editTransaction(t: Transaction) {
@@ -202,14 +168,20 @@ export default function Home() {
     setEditingId(t.id);
   }
 
+  function addCategory() {
+    if (!customCategory.trim()) return;
+    setCategories((p) => [...p, customCategory]);
+    setCustomCategory("");
+  }
+
   // =====================
-  // DATA SPLIT
+  // DATA
   // =====================
   const incomeData = Object.values(
     transactions.reduce((acc, t) => {
       if (t.type !== "income") return acc;
       if (!acc[t.category]) acc[t.category] = { name: t.category, value: 0 };
-      acc[t.category].value += Number(t.amount);
+      acc[t.category].value += t.amount;
       return acc;
     }, {} as Record<string, { name: string; value: number }>)
   );
@@ -218,141 +190,163 @@ export default function Home() {
     transactions.reduce((acc, t) => {
       if (t.type !== "expense") return acc;
       if (!acc[t.category]) acc[t.category] = { name: t.category, value: 0 };
-      acc[t.category].value += Number(t.amount);
+      acc[t.category].value += t.amount;
       return acc;
     }, {} as Record<string, { name: string; value: number }>)
   );
 
-  // =====================
-  // COLORS UPDATE HELPERS
-  // =====================
-  function updateColor(
-    type: "income" | "expense",
-    index: number,
-    color: string
-  ) {
-    if (type === "income") {
-      setIncomeColors((prev) => prev.map((c, i) => (i === index ? color : c)));
-    } else {
-      setExpenseColors((prev) => prev.map((c, i) => (i === index ? color : c)));
-    }
-  }
+  const income = transactions.filter(t => t.type === "income").reduce((a, b) => a + b.amount, 0);
+  const expenses = transactions.filter(t => t.type === "expense").reduce((a, b) => a + b.amount, 0);
 
-  // =====================
-  // GUARD
-  // =====================
   if (loadingAuth) return <main>Loading session...</main>;
   if (!user) return null;
 
-  const income = transactions.filter((t) => t.type === "income").reduce((a, b) => a + b.amount, 0);
-  const expenses = transactions.filter((t) => t.type === "expense").reduce((a, b) => a + b.amount, 0);
-  const balance = income - expenses;
-
   return (
     <main style={{ padding: 30, fontFamily: "Arial" }}>
+      {/* HEADER */}
       <div style={{ display: "flex", justifyContent: "space-between" }}>
         <h1>Finance Tracker</h1>
         <div style={{ display: "flex", gap: 10 }}>
           <p>{user.email}</p>
-          <button onClick={logout}>Logout</button>
+          <button onClick={() => router.push("/login")}>Logout</button>
         </div>
       </div>
 
-      {/* ===================== */}
       {/* OVERVIEW */}
-      {/* ===================== */}
       <div style={{ marginTop: 20 }}>
-        <p>Balance: ₱{balance}</p>
         <p>Income: ₱{income}</p>
         <p>Expenses: ₱{expenses}</p>
       </div>
 
-      {/* ===================== */}
-      {/* CHARTS */}
-      {/* ===================== */}
-      <div style={{ display: "flex", gap: 40, marginTop: 30 }}>
+      {/* MAIN */}
+      <div style={{ display: "flex", gap: 30, marginTop: 20 }}>
 
-        {/* INCOME */}
-        <div
-          style={{ width: "50%", position: "relative" }}
-          onMouseEnter={() => setActiveMenu("income")}
-          onMouseLeave={() => setActiveMenu(null)}
-        >
-          <h3>Income</h3>
+        {/* LEFT */}
+        <div style={{ flex: 2 }}>
 
-          {activeMenu === "income" && (
-            <div style={{ position: "absolute", right: 0, top: 0 }}>
-              <button onClick={() => setColorPicker({ type: "income", index: 0 })}>
-                ⋮
-              </button>
-            </div>
-          )}
+          {/* CATEGORY */}
+          <div>
+            <input
+              placeholder="New category"
+              value={customCategory}
+              onChange={(e) => setCustomCategory(e.target.value)}
+            />
+            <button onClick={addCategory}>Add</button>
+          </div>
 
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie data={incomeData} dataKey="value" nameKey="name" label>
-                {incomeData.map((_, i) => (
-                  <Cell key={i} fill={incomeColors[i % incomeColors.length]} />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
+          {/* INPUT */}
+          <div style={{ marginTop: 10 }}>
+            <input placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
+            <input placeholder="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
+
+            <select value={type} onChange={(e) => setType(e.target.value as any)}>
+              <option value="expense">Expense</option>
+              <option value="income">Income</option>
+            </select>
+
+            <select value={category} onChange={(e) => setCategory(e.target.value)}>
+              {categories.map(c => <option key={c}>{c}</option>)}
+            </select>
+
+            <button onClick={addTransaction}>
+              {editingId ? "Save Edit" : "Add"}
+            </button>
+          </div>
+
+          {/* LIST */}
+          <div style={{ marginTop: 20 }}>
+            {transactions.map(t => (
+              <div key={t.id}>
+                <b>{t.title}</b>
+                <p>₱{t.amount} ({t.category})</p>
+                <button onClick={() => editTransaction(t)}>Edit</button>
+                <button onClick={() => deleteTransaction(t.id)}>Delete</button>
+              </div>
+            ))}
+          </div>
         </div>
 
-        {/* EXPENSE */}
-        <div
-          style={{ width: "50%", position: "relative" }}
-          onMouseEnter={() => setActiveMenu("expense")}
-          onMouseLeave={() => setActiveMenu(null)}
-        >
-          <h3>Expenses</h3>
+        {/* RIGHT */}
+        <div style={{ flex: 1 }}>
 
-          {activeMenu === "expense" && (
-            <div style={{ position: "absolute", right: 0, top: 0 }}>
-              <button onClick={() => setColorPicker({ type: "expense", index: 0 })}>
+          {/* INCOME */}
+          <div
+            onMouseEnter={() => setMenuOpen("income")}
+            onMouseLeave={() => setMenuOpen(null)}
+            style={{ position: "relative" }}
+          >
+            <h3>Income</h3>
+
+            {menuOpen === "income" && (
+              <button onClick={() => setColorPicker({ type: "income" })}>
                 ⋮
               </button>
-            </div>
-          )}
+            )}
 
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie data={expenseData} dataKey="value" nameKey="name" label>
-                {expenseData.map((_, i) => (
-                  <Cell key={i} fill={expenseColors[i % expenseColors.length]} />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
+            <ResponsiveContainer width="100%" height={250}>
+              <PieChart>
+                <Pie data={incomeData} dataKey="value" nameKey="name" label>
+                  {incomeData.map((_, i) => (
+                    <Cell key={i} fill={incomeColors[i % incomeColors.length]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* EXPENSE */}
+          <div
+            onMouseEnter={() => setMenuOpen("expense")}
+            onMouseLeave={() => setMenuOpen(null)}
+            style={{ position: "relative", marginTop: 20 }}
+          >
+            <h3>Expenses</h3>
+
+            {menuOpen === "expense" && (
+              <button onClick={() => setColorPicker({ type: "expense" })}>
+                ⋮
+              </button>
+            )}
+
+            <ResponsiveContainer width="100%" height={250}>
+              <PieChart>
+                <Pie data={expenseData} dataKey="value" nameKey="name" label>
+                  {expenseData.map((_, i) => (
+                    <Cell key={i} fill={expenseColors[i % expenseColors.length]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+
         </div>
       </div>
 
-      {/* ===================== */}
-      {/* COLOR PICKER POPUP */}
-      {/* ===================== */}
+      {/* COLOR PICKER */}
       {colorPicker && (
-        <div
-          style={{
-            position: "fixed",
-            top: "40%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            background: "white",
-            padding: 20,
-            border: "1px solid #ccc",
-          }}
-        >
+        <div style={{
+          position: "fixed",
+          top: "40%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          background: "white",
+          padding: 20,
+          border: "1px solid #ccc"
+        }}>
           <h3>Pick Color</h3>
-
           <input
             type="color"
-            onChange={(e) =>
-              updateColor(colorPicker.type, colorPicker.index, e.target.value)
-            }
+            onChange={(e) => {
+              const color = e.target.value;
+              if (colorPicker.type === "income") {
+                setIncomeColors(prev => [...prev, color]);
+              } else {
+                setExpenseColors(prev => [...prev, color]);
+              }
+            }}
           />
-
           <button onClick={() => setColorPicker(null)}>Close</button>
         </div>
       )}
