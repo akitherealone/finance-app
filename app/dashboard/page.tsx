@@ -213,9 +213,6 @@ export default function Home() {
 
   const balance = income - expenses;
 
-  // =====================
-  // CHART DATA
-  // =====================
   const incomeData = Object.values(
     transactions.reduce((acc, t) => {
       if (t.type !== "income") return acc;
@@ -261,47 +258,20 @@ export default function Home() {
       {/* BODY */}
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
 
-        {/* LEFT SIDE (NOW TRANSACTION FIRST) */}
+        {/* LEFT SIDE (OVERVIEW + TRANSACTIONS) */}
         <div style={{ flex: 2, padding: 20, overflowY: "auto" }}>
 
-          {/* TRANSACTIONS SECTION (SWAPPED + FIXED COLORS) */}
-          <div style={{ background: "#2b2b2b", padding: 15, borderRadius: 10, color: "white" }}>
-            <h2>Transactions</h2>
-
-            <div style={{ marginTop: 20 }}>
-              {loadingData && <p>Loading...</p>}
-
-              {transactions.map((t) => (
-                <div key={t.id} style={{ marginBottom: 10 }}>
-                  <strong>{t.title}</strong>
-                  <p style={{ color: t.type === "income" ? "#4ade80" : "#f87171" }}>
-                    ₱{t.amount} ({t.category})
-                  </p>
-
-                  <button onClick={() => editTransaction(t)}>Edit</button>
-                  <button onClick={() => deleteTransaction(t.id)} style={{ color: "red" }}>
-                    Delete
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* OVERVIEW (NOW BELOW TRANSACTIONS) */}
-          <div style={{ marginTop: 20 }}>
+          {/* OVERVIEW (moved here as requested) */}
+          <div style={{ marginBottom: 20 }}>
             <h2>Overview</h2>
             <p>💰 Balance: ₱{balance}</p>
             <p style={{ color: "green" }}>📈 Income: ₱{income}</p>
             <p style={{ color: "red" }}>📉 Expenses: ₱{expenses}</p>
           </div>
 
-        </div>
-
-        {/* RIGHT SIDE */}
-        <div style={{ flex: 1, borderLeft: "1px solid #ddd", padding: 20, display: "flex", flexDirection: "column", gap: 20 }}>
-
-          {/* FLOATING INPUT CARD (UNCHANGED LOGIC) */}
-          <div style={{ padding: 15, border: "1px solid #ddd", borderRadius: 10, position: "sticky", top: 10, background: "white" }}>
+          {/* ADD SECTION (floating above history) */}
+          <div style={{ padding: 15, border: "1px solid #ddd", borderRadius: 10, marginBottom: 20 }}>
+            <h3>Add Data</h3>
 
             <input
               placeholder="New category"
@@ -331,32 +301,54 @@ export default function Home() {
             </div>
           </div>
 
-          {/* ANALYTICS */}
+          {/* TRANSACTION HISTORY (independent scroll) */}
           <div>
-            <h3>Income</h3>
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie data={incomeData} dataKey="value" nameKey="name" label>
-                  {incomeData.map((_, i) => (
-                    <Cell key={i} fill={["#FF4D4D", "#4DA6FF", "#4DFF88", "#FFB84D", "#B84DFF"][i % 5]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+            <h3>Transaction History</h3>
 
-            <h3 style={{ marginTop: 20 }}>Expenses</h3>
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie data={expenseData} dataKey="value" nameKey="name" label>
-                  {expenseData.map((_, i) => (
-                    <Cell key={i} fill={["#FF4D4D", "#4DA6FF", "#4DFF88", "#FFB84D", "#B84DFF"][i % 5]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+            {loadingData && <p>Loading...</p>}
+
+            {transactions.map((t) => (
+              <div key={t.id} style={{ marginBottom: 10 }}>
+                <strong>{t.title}</strong>
+                <p style={{ color: t.type === "income" ? "green" : "red" }}>
+                  ₱{t.amount} ({t.category})
+                </p>
+
+                <button onClick={() => editTransaction(t)}>Edit</button>
+                <button onClick={() => deleteTransaction(t.id)} style={{ color: "red" }}>
+                  Delete
+                </button>
+              </div>
+            ))}
           </div>
+        </div>
+
+        {/* RIGHT SIDE (ANALYTICS FIXED) */}
+        <div style={{ flex: 1, borderLeft: "1px solid #ddd", padding: 20 }}>
+
+          <h3>Income</h3>
+          <ResponsiveContainer width="100%" height={200}>
+            <PieChart>
+              <Pie data={incomeData} dataKey="value" nameKey="name" label>
+                {incomeData.map((_, i) => (
+                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip />
+            </PieChart>
+          </ResponsiveContainer>
+
+          <h3 style={{ marginTop: 20 }}>Expenses</h3>
+          <ResponsiveContainer width="100%" height={200}>
+            <PieChart>
+              <Pie data={expenseData} dataKey="value" nameKey="name" label>
+                {expenseData.map((_, i) => (
+                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip />
+            </PieChart>
+          </ResponsiveContainer>
 
         </div>
       </div>
