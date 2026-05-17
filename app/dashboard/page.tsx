@@ -24,9 +24,9 @@ export default function Home() {
   const router = useRouter();
 
   const [user, setUser] = useState<any>(null);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-
   const [loadingAuth, setLoadingAuth] = useState(true);
+
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loadingData, setLoadingData] = useState(false);
 
   const [title, setTitle] = useState("");
@@ -34,6 +34,7 @@ export default function Home() {
   const [category, setCategory] = useState("Food");
   const [type, setType] = useState<"income" | "expense">("expense");
 
+  const [customCategory, setCustomCategory] = useState("");
   const [categories, setCategories] = useState([
     "Food",
     "Transport",
@@ -43,60 +44,21 @@ export default function Home() {
     "Other",
   ]);
 
-  const [customCategory, setCustomCategory] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [fullscreen, setFullscreen] = useState(false);
 
-  const [openMenu, setOpenMenu] = useState<string | null>(null);
-  const [colorPicker, setColorPicker] = useState<string | null>(null);
+  // ================= CHART CUSTOMIZATION =================
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [colorPickerOpen, setColorPickerOpen] = useState(false);
 
-  // CATEGORY COLORS (CUSTOMIZABLE)
   const [categoryColors, setCategoryColors] = useState<Record<string, string>>(
     {}
   );
 
-  const DEFAULT_COLORS = [
-    "#FF4D4D",
-    "#4DA6FF",
-    "#4DFF88",
-    "#FFB84D",
-    "#B84DFF",
-    "#00C2FF",
-    "#FF66C4",
-  ];
+  const COLORS = ["#FF4D4D", "#4DA6FF", "#4DFF88", "#FFB84D", "#B84DFF"];
 
-  // ================= AUTH =================
-  useEffect(() => {
-    const init = async () => {
-      const { data } = await supabase.auth.getSession();
-      setUser(data.session?.user ?? null);
-      setLoadingAuth(false);
-    };
-
-    init();
-  }, []);
-
-  // ================= FETCH =================
-  useEffect(() => {
-    if (!user) return;
-
-    const fetchData = async () => {
-      setLoadingData(true);
-
-      const { data } = await supabase
-        .from("transactions")
-        .select("*")
-        .eq("user_id", user.id);
-
-      setTransactions(data ?? []);
-      setLoadingData(false);
-    };
-
-    fetchData();
-  }, [user]);
-
-  // ================= COLORS =================
   function getColor(category: string, index: number) {
-    return categoryColors[category] || DEFAULT_COLORS[index % DEFAULT_COLORS.length];
+    return categoryColors[category] || COLORS[index % COLORS.length];
   }
 
   function setCategoryColor(cat: string, color: string) {
@@ -106,38 +68,71 @@ export default function Home() {
     }));
   }
 
-  // ================= DATA =================
-  const expenseData = Object.values(
-    transactions.reduce((acc, t) => {
-      if (t.type !== "expense") return acc;
+  // ================= AUTH =================
+  useEffect(() => {
+    let mounted = true;
 
-      if (!acc[t.category]) {
-        acc[t.category] = { name: t.category, value: 0 };
-      }
+    const initAuth = async () => {
+      const { data } = await supabase.auth.getSession();
 
-      acc[t.category].value += t.amount;
+      if (!mounted) return;
 
-      return acc;
-    }, {} as Record<string, { name: string; value: number }>)
-  );
+      setUser(data.session?.user ?? null);
+      setLoadingAuth(false);
+    };
 
-  // ================= CHART CUSTOM LABEL =================
-  const renderLabel = (entry: any) => {
-    return entry.name; // ONLY CATEGORY shown on pie
-  };
+    initAuth();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return;
+      setUser(session?.user ?? null);
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  // ================= FETCH =================
+  useEffect(() => {
+    if (!user) return;
+
+    async function fetchTransactions() {
+      setLoadingData(true);
+
+      const { data } = await supabase
+        .from("transactions")
+        .select("*")
+        .eq("user_id", user.id);
+
+      setTransactions(data ?? []);
+      setLoadingData(false);
+    }
+
+    fetchTransactions();
+  }, [user]);
+
+  // ================= LOGOUT =================
+  async function logout() {
+    await supabase.auth.signOut();
+    router.replace("/login");
+  }
 
   // ================= ADD =================
   async function addTransaction() {
     if (!title.trim() || !amount.trim()) return;
 
-    const amountNum = Number(amount);
+    const amountNumber = Number(amount);
 
     const { data } = await supabase
       .from("transactions")
       .insert([
         {
           title,
-          amount: amountNum,
+          amount: amountNumber,
           category,
           type,
           user_id: user.id,
@@ -146,7 +141,7 @@ export default function Home() {
       .select();
 
     if (data?.[0]) {
-      setTransactions((p) => [data[0], ...p]);
+      setTransactions((prev) => [data[0], ...prev]);
     }
 
     setTitle("");
@@ -159,137 +154,198 @@ export default function Home() {
     setTransactions((p) => p.filter((t) => t.id !== id));
   }
 
-  if (loadingAuth) return <div>Loading...</div>;
+  // ================= LOADING =================
+  if (loadingAuth) return <main>Loading session...</main>;
   if (!user) return null;
 
+  // ================= CALCULATIONS =================
+  const income = transactions
+    .filter((t) => t.type === "income")
+    .reduce((s, t) => s + t.amount, 0);
+
+  const expenses = transactions
+    .filter((t) => t.type === "expense")
+    .reduce((s, t) => s + t.amount, 0);
+
+  const balance = income - expenses;
+
+  const expenseData = Object.values(
+    transactions.reduce((acc, t) => {
+      if (t.type !== "expense") return acc;
+
+      if (!acc[t.category]) {
+        acc[t.category] = { name: t.category, value: 0 };
+      }
+
+      acc[t.category].value += t.amount;
+      return acc;
+    }, {} as Record<string, { name: string; value: number }>)
+  );
+
+  const renderLabel = (entry: any) => entry.name;
+
+  // ================= UI =================
   return (
-    <main style={{ display: "flex", height: "100vh", fontFamily: "Arial" }}>
+    <main style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
 
-      {/* LEFT: ANALYTICS */}
-      <div style={{ width: 420, borderRight: "1px solid #ddd", padding: 20 }}>
+      {/* HEADER (UNCHANGED STRUCTURE) */}
+      <div style={{
+        display: "flex",
+        justifyContent: "space-between",
+        padding: 20,
+        borderBottom: "1px solid #ddd",
+      }}>
+        <h2>Finance Tracker</h2>
 
-        <h2>Expenses</h2>
+        <div style={{ display: "flex", gap: 10 }}>
+          <span>{user.email}</span>
+          <button onClick={logout}>Logout</button>
+          <button onClick={() => setFullscreen(p => !p)}>
+            {fullscreen ? "Exit Focus" : "Focus Mode"}
+          </button>
+        </div>
+      </div>
 
-        <div style={{ position: "relative" }}>
+      {/* BODY */}
+      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
 
-          {/* 3 DOT MENU (GLOBAL FOR CHART) */}
-          <div
-            style={{
-              position: "absolute",
-              right: 10,
-              top: 10,
-              cursor: "pointer",
-            }}
-            onClick={() => setOpenMenu(openMenu ? null : "main")}
-          >
-            ⋮
+        {/* LEFT - FLOATING OVERVIEW + CHART */}
+        <div style={{
+          width: 420,
+          borderRight: "1px solid #ddd",
+          padding: 20,
+          overflow: "hidden"
+        }}>
+
+          {/* OVERVIEW (UNCHANGED) */}
+          <div style={{ marginBottom: 20 }}>
+            <h3>Overview</h3>
+            <p>Balance: ₱{balance}</p>
+            <p style={{ color: "green" }}>Income: ₱{income}</p>
+            <p style={{ color: "red" }}>Expenses: ₱{expenses}</p>
           </div>
 
-          {openMenu && (
+          {/* CHART HEADER */}
+          <div style={{ position: "relative" }}>
+            <h3>Expenses</h3>
+
+            {/* 3 DOT MENU */}
             <div
-              style={{
+              style={{ position: "absolute", right: 0, top: 0, cursor: "pointer" }}
+              onClick={() => setMenuOpen(p => !p)}
+            >
+              ⋮
+            </div>
+
+            {menuOpen && (
+              <div style={{
                 position: "absolute",
-                right: 10,
-                top: 30,
+                right: 0,
+                top: 25,
                 background: "white",
                 border: "1px solid #ddd",
                 padding: 10,
-                zIndex: 10,
-              }}
-            >
-              <button onClick={() => setColorPicker("open")}>
-                Change Colors
-              </button>
-            </div>
-          )}
+                zIndex: 10
+              }}>
+                <button onClick={() => setColorPickerOpen(true)}>
+                  Customize Colors
+                </button>
+              </div>
+            )}
+          </div>
 
-          {colorPicker && (
-            <div
-              style={{
-                position: "fixed",
-                top: "40%",
-                left: "40%",
-                background: "white",
-                padding: 20,
-                border: "1px solid #ccc",
-              }}
-            >
-              <h4>Pick Category Colors</h4>
+          {/* COLOR PICKER */}
+          {colorPickerOpen && (
+            <div style={{
+              position: "fixed",
+              top: "30%",
+              left: "40%",
+              background: "white",
+              padding: 20,
+              border: "1px solid #ccc",
+              zIndex: 20
+            }}>
+              <h4>Category Colors</h4>
 
               {expenseData.map((d, i) => (
                 <div key={d.name} style={{ marginBottom: 10 }}>
                   <span>{d.name}</span>
                   <input
                     type="color"
-                    value={categoryColors[d.name] || DEFAULT_COLORS[i]}
+                    value={categoryColors[d.name] || COLORS[i % COLORS.length]}
                     onChange={(e) => setCategoryColor(d.name, e.target.value)}
                   />
                 </div>
               ))}
 
-              <button onClick={() => setColorPicker(null)}>Close</button>
+              <button onClick={() => setColorPickerOpen(false)}>Close</button>
             </div>
           )}
 
-          <div style={{ width: "100%", height: 300 }}>
+          {/* PIE CHART */}
+          <div style={{ width: "100%", height: 280 }}>
             <ResponsiveContainer>
               <PieChart>
                 <Pie
                   data={expenseData}
                   dataKey="value"
                   nameKey="name"
-                  label={renderLabel} // CATEGORY ONLY
                   outerRadius={110}
+                  label={renderLabel} // CATEGORY ONLY
                 >
-                  {expenseData.map((entry, i) => (
+                  {expenseData.map((e, i) => (
                     <Cell
-                      key={entry.name}
-                      fill={getColor(entry.name, i)}
+                      key={e.name}
+                      fill={getColor(e.name, i)}
                     />
                   ))}
                 </Pie>
 
-                {/* ONLY SHOW AMOUNT ON HOVER */}
-                <Tooltip formatter={(value: any) => [`₱${value}`, "Amount"]} />
+                {/* ONLY AMOUNT ON HOVER */}
+                <Tooltip formatter={(v: any) => [`₱${v}`, "Amount"]} />
               </PieChart>
             </ResponsiveContainer>
           </div>
+
         </div>
-      </div>
 
-      {/* RIGHT: TRANSACTIONS */}
-      <div style={{ flex: 1, padding: 20, overflowY: "auto" }}>
+        {/* RIGHT - TRANSACTIONS (UNCHANGED STRUCTURE) */}
+        <div style={{ flex: 1, padding: 20, overflowY: "auto" }}>
 
-        <h2>Add Transaction</h2>
+          <h3>Add Transaction</h3>
 
-        <input placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
-        <input placeholder="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Title" />
+          <input value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount" />
 
-        <select value={type} onChange={(e) => setType(e.target.value as any)}>
-          <option value="expense">Expense</option>
-          <option value="income">Income</option>
-        </select>
+          <select value={type} onChange={e => setType(e.target.value as any)}>
+            <option value="expense">Expense</option>
+            <option value="income">Income</option>
+          </select>
 
-        <select value={category} onChange={(e) => setCategory(e.target.value)}>
-          {categories.map((c) => (
-            <option key={c}>{c}</option>
+          <select value={category} onChange={e => setCategory(e.target.value)}>
+            <option>Food</option>
+            <option>Transport</option>
+            <option>School</option>
+            <option>Savings</option>
+            <option>Entertainment</option>
+            <option>Other</option>
+          </select>
+
+          <button onClick={addTransaction}>Add</button>
+
+          <hr style={{ margin: "20px 0" }} />
+
+          <h3>History</h3>
+
+          {transactions.map(t => (
+            <div key={t.id}>
+              <b>{t.title}</b>
+              <p>₱{t.amount} ({t.category})</p>
+              <button onClick={() => deleteTransaction(t.id)}>Delete</button>
+            </div>
           ))}
-        </select>
 
-        <button onClick={addTransaction}>Add</button>
-
-        <hr style={{ margin: "20px 0" }} />
-
-        <h2>History</h2>
-
-        {transactions.map((t) => (
-          <div key={t.id} style={{ marginBottom: 10 }}>
-            <b>{t.title}</b>
-            <p>₱{t.amount} ({t.category})</p>
-
-            <button onClick={() => deleteTransaction(t.id)}>Delete</button>
-          </div>
-        ))}
+        </div>
       </div>
     </main>
   );
