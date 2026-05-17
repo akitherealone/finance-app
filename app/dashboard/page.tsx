@@ -221,7 +221,7 @@ export default function Home() {
         acc[t.category] = { name: t.category, value: 0 };
       }
 
-      acc[t.category].value += Number(t.amount);
+      acc[t.category].value += t.amount;
       return acc;
     }, {} as Record<string, { name: string; value: number }>)
   );
@@ -234,7 +234,7 @@ export default function Home() {
         acc[t.category] = { name: t.category, value: 0 };
       }
 
-      acc[t.category].value += Number(t.amount);
+      acc[t.category].value += t.amount;
       return acc;
     }, {} as Record<string, { name: string; value: number }>)
   );
@@ -243,10 +243,10 @@ export default function Home() {
   // UI
   // =====================
   return (
-    <main style={{ height: "100vh", display: "flex", flexDirection: "column", fontFamily: "Arial" }}>
+    <main style={{ padding: 30, fontFamily: "Arial" }}>
 
       {/* HEADER */}
-      <div style={{ padding: 20, display: "flex", justifyContent: "space-between", borderBottom: "1px solid #ddd" }}>
+      <div style={{ display: "flex", justifyContent: "space-between" }}>
         <h1>Finance Tracker</h1>
 
         <div style={{ display: "flex", gap: 10 }}>
@@ -255,26 +255,47 @@ export default function Home() {
         </div>
       </div>
 
-      {/* BODY */}
-      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+      {/* MAIN LAYOUT */}
+      <div style={{ display: "flex", gap: 20, marginTop: 20 }}>
 
-        {/* LEFT SIDE (ADD + HISTORY SCROLLS) */}
-        <div style={{ flex: 2, padding: 20, overflowY: "auto" }}>
+        {/* LEFT SIDE */}
+        <div style={{ flex: 2 }}>
 
-          {/* ADD TRANSACTION (separate div above history) */}
-          <div style={{ padding: 15, border: "1px solid #ddd", borderRadius: 10, marginBottom: 20 }}>
+          {/* STICKY ADD CARD */}
+          <div
+            style={{
+              position: "sticky",
+              top: 20,
+              background: "white",
+              border: "1px solid #ddd",
+              padding: 15,
+              borderRadius: 10,
+              zIndex: 10,
+            }}
+          >
             <h3>Add Transaction</h3>
 
-            <input
-              placeholder="New category"
-              value={customCategory}
-              onChange={(e) => setCustomCategory(e.target.value)}
-            />
-            <button onClick={addCategory}>Add</button>
+            <div>
+              <input
+                placeholder="New category"
+                value={customCategory}
+                onChange={(e) => setCustomCategory(e.target.value)}
+              />
+              <button onClick={addCategory}>Add</button>
+            </div>
 
             <div style={{ marginTop: 10 }}>
-              <input placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
-              <input placeholder="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
+              <input
+                placeholder="Title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+              />
+
+              <input
+                placeholder="Amount"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+              />
 
               <select value={type} onChange={(e) => setType(e.target.value as any)}>
                 <option value="expense">Expense</option>
@@ -293,12 +314,15 @@ export default function Home() {
             </div>
           </div>
 
-          {/* TRANSACTION HISTORY (ONLY SCROLLABLE CONTENT) */}
-          <div>
-            <h3>Transaction History</h3>
-
-            {loadingData && <p>Loading...</p>}
-
+          {/* SCROLLABLE HISTORY ONLY */}
+          <div
+            style={{
+              marginTop: 20,
+              maxHeight: "65vh",
+              overflowY: "auto",
+              paddingRight: 10,
+            }}
+          >
             {transactions.map((t) => (
               <div key={t.id} style={{ marginBottom: 10 }}>
                 <strong>{t.title}</strong>
@@ -307,7 +331,10 @@ export default function Home() {
                 </p>
 
                 <button onClick={() => editTransaction(t)}>Edit</button>
-                <button onClick={() => deleteTransaction(t.id)} style={{ color: "red" }}>
+                <button
+                  onClick={() => deleteTransaction(t.id)}
+                  style={{ color: "red" }}
+                >
                   Delete
                 </button>
               </div>
@@ -315,10 +342,10 @@ export default function Home() {
           </div>
         </div>
 
-        {/* RIGHT SIDE (OVERVIEW ABOVE CHARTS) */}
-        <div style={{ flex: 1, borderLeft: "1px solid #ddd", padding: 20 }}>
+        {/* RIGHT SIDE */}
+        <div style={{ flex: 1, borderLeft: "1px solid #ddd", paddingLeft: 20 }}>
 
-          {/* OVERVIEW (moved here) */}
+          {/* OVERVIEW */}
           <div style={{ marginBottom: 20 }}>
             <h2>Overview</h2>
             <p>💰 Balance: ₱{balance}</p>
@@ -328,29 +355,33 @@ export default function Home() {
 
           {/* INCOME CHART */}
           <h3>Income</h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie data={incomeData} dataKey="value" nameKey="name" label>
-                {incomeData.map((_, i) => (
-                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
+          <div style={{ width: "100%", height: 250 }}>
+            <ResponsiveContainer>
+              <PieChart>
+                <Pie data={incomeData} dataKey="value" nameKey="name" outerRadius={100} label>
+                  {incomeData.map((_, i) => (
+                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
 
           {/* EXPENSE CHART */}
           <h3 style={{ marginTop: 20 }}>Expenses</h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie data={expenseData} dataKey="value" nameKey="name" label>
-                {expenseData.map((_, i) => (
-                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
+          <div style={{ width: "100%", height: 250 }}>
+            <ResponsiveContainer>
+              <PieChart>
+                <Pie data={expenseData} dataKey="value" nameKey="name" outerRadius={100} label>
+                  {expenseData.map((_, i) => (
+                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
 
         </div>
       </div>
