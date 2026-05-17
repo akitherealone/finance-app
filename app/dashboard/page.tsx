@@ -258,20 +258,12 @@ export default function Home() {
       {/* BODY */}
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
 
-        {/* LEFT SIDE (OVERVIEW + TRANSACTIONS) */}
+        {/* LEFT SIDE (ADD + HISTORY SCROLLS) */}
         <div style={{ flex: 2, padding: 20, overflowY: "auto" }}>
 
-          {/* OVERVIEW (moved here as requested) */}
-          <div style={{ marginBottom: 20 }}>
-            <h2>Overview</h2>
-            <p>💰 Balance: ₱{balance}</p>
-            <p style={{ color: "green" }}>📈 Income: ₱{income}</p>
-            <p style={{ color: "red" }}>📉 Expenses: ₱{expenses}</p>
-          </div>
-
-          {/* ADD SECTION (floating above history) */}
+          {/* ADD TRANSACTION (separate div above history) */}
           <div style={{ padding: 15, border: "1px solid #ddd", borderRadius: 10, marginBottom: 20 }}>
-            <h3>Add Data</h3>
+            <h3>Add Transaction</h3>
 
             <input
               placeholder="New category"
@@ -301,7 +293,7 @@ export default function Home() {
             </div>
           </div>
 
-          {/* TRANSACTION HISTORY (independent scroll) */}
+          {/* TRANSACTION HISTORY (ONLY SCROLLABLE CONTENT) */}
           <div>
             <h3>Transaction History</h3>
 
@@ -323,9 +315,18 @@ export default function Home() {
           </div>
         </div>
 
-        {/* RIGHT SIDE (ANALYTICS FIXED) */}
+        {/* RIGHT SIDE (OVERVIEW ABOVE CHARTS) */}
         <div style={{ flex: 1, borderLeft: "1px solid #ddd", padding: 20 }}>
 
+          {/* OVERVIEW (moved here) */}
+          <div style={{ marginBottom: 20 }}>
+            <h2>Overview</h2>
+            <p>💰 Balance: ₱{balance}</p>
+            <p style={{ color: "green" }}>📈 Income: ₱{income}</p>
+            <p style={{ color: "red" }}>📉 Expenses: ₱{expenses}</p>
+          </div>
+
+          {/* INCOME CHART */}
           <h3>Income</h3>
           <ResponsiveContainer width="100%" height={200}>
             <PieChart>
@@ -338,6 +339,7 @@ export default function Home() {
             </PieChart>
           </ResponsiveContainer>
 
+          {/* EXPENSE CHART */}
           <h3 style={{ marginTop: 20 }}>Expenses</h3>
           <ResponsiveContainer width="100%" height={200}>
             <PieChart>
