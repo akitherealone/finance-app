@@ -51,52 +51,42 @@ export default function Home() {
 
   const COLORS = ["#FF4D4D", "#4DA6FF", "#4DFF88", "#FFB84D", "#B84DFF"];
 
-// =====================
-// AUTH (FINAL FIX)
-// =====================
-useEffect(() => {
-  let mounted = true;
+  // =====================
+  // AUTH
+  // =====================
+  useEffect(() => {
+    let mounted = true;
 
-  const initAuth = async () => {
-    setLoadingAuth(true);
+    const initAuth = async () => {
+      setLoadingAuth(true);
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!mounted) return;
+
+      setUser(session?.user ?? null);
+      setLoadingAuth(false);
+    };
+
+    initAuth();
 
     const {
-      data: { session },
-    } = await supabase.auth.getSession();
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return;
+      setUser(session?.user ?? null);
+    });
 
-    if (!mounted) return;
-
-    if (session?.user) {
-      setUser(session.user);
-    } else {
-      setUser(null);
-    }
-
-    setLoadingAuth(false);
-  };
-
-  initAuth();
-
-  const {
-    data: { subscription },
-  } = supabase.auth.onAuthStateChange((_event, session) => {
-    if (!mounted) return;
-
-    if (session?.user) {
-      setUser(session.user);
-    } else {
-      setUser(null);
-    }
-  });
-
-  return () => {
-    mounted = false;
-    subscription.unsubscribe();
-  };
-}, []);
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   // =====================
-  // FETCH TRANSACTIONS
+  // FETCH
   // =====================
   useEffect(() => {
     if (!user) return;
@@ -206,10 +196,9 @@ useEffect(() => {
   }
 
   // =====================
-  // LOADING GUARD (IMPORTANT)
+  // LOADING GUARD
   // =====================
   if (loadingAuth) return <main>Loading session...</main>;
-  console.log("AUTH USER:", user);
   if (!user) return null;
 
   // =====================
@@ -225,16 +214,32 @@ useEffect(() => {
 
   const balance = income - expenses;
 
-  const categoryData = Object.values(
+  // =====================
+  // 🔥 SEPARATED CHART DATA (NEW)
+  // =====================
+
+  const incomeData = Object.values(
     transactions.reduce((acc, t) => {
+      if (t.type !== "income") return acc;
+
       if (!acc[t.category]) {
         acc[t.category] = { name: t.category, value: 0 };
       }
 
-      if (t.type === "expense") {
-        acc[t.category].value += t.amount;
+      acc[t.category].value += Number(t.amount);
+      return acc;
+    }, {} as Record<string, { name: string; value: number }>)
+  );
+
+  const expenseData = Object.values(
+    transactions.reduce((acc, t) => {
+      if (t.type !== "expense") return acc;
+
+      if (!acc[t.category]) {
+        acc[t.category] = { name: t.category, value: 0 };
       }
 
+      acc[t.category].value += Number(t.amount);
       return acc;
     }, {} as Record<string, { name: string; value: number }>)
   );
@@ -263,14 +268,9 @@ useEffect(() => {
         <p style={{ color: "red" }}>📉 Expenses: ₱{expenses}</p>
       </div>
 
-      <div
-        style={{
-          display: "flex",
-          gap: 20,
-          marginTop: 20,
-          flexDirection: fullscreen ? "column" : "row",
-        }}
-      >
+      <div style={{ display: "flex", gap: 20, marginTop: 20, flexDirection: fullscreen ? "column" : "row" }}>
+        
+        {/* LEFT */}
         <div style={{ flex: fullscreen ? 1 : 2 }}>
           <div>
             <input
@@ -282,17 +282,8 @@ useEffect(() => {
           </div>
 
           <div style={{ marginTop: 10 }}>
-            <input
-              placeholder="Title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
-
-            <input
-              placeholder="Amount"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-            />
+            <input placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
+            <input placeholder="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
 
             <select value={type} onChange={(e) => setType(e.target.value as any)}>
               <option value="expense">Expense</option>
@@ -311,8 +302,6 @@ useEffect(() => {
           </div>
 
           <div style={{ marginTop: 20 }}>
-            {loadingData && <p>Loading transactions...</p>}
-
             {transactions.map((t) => (
               <div key={t.id} style={{ marginBottom: 10 }}>
                 <strong>{t.title}</strong>
@@ -329,21 +318,18 @@ useEffect(() => {
           </div>
         </div>
 
+        {/* RIGHT - TWO PIE CHARTS */}
         {!fullscreen && (
           <div style={{ flex: 1, borderLeft: "1px solid #ddd", paddingLeft: 20 }}>
             <h2>Analytics</h2>
 
-            <div style={{ width: "100%", height: 300 }}>
+            {/* INCOME */}
+            <h3 style={{ color: "#16a34a" }}>Income</h3>
+            <div style={{ width: "100%", height: 250 }}>
               <ResponsiveContainer>
                 <PieChart>
-                  <Pie
-                    data={categoryData}
-                    dataKey="value"
-                    nameKey="name"
-                    outerRadius={120}
-                    label
-                  >
-                    {categoryData.map((_, i) => (
+                  <Pie data={incomeData} dataKey="value" nameKey="name" outerRadius={100} label>
+                    {incomeData.map((_, i) => (
                       <Cell key={i} fill={COLORS[i % COLORS.length]} />
                     ))}
                   </Pie>
@@ -351,6 +337,22 @@ useEffect(() => {
                 </PieChart>
               </ResponsiveContainer>
             </div>
+
+            {/* EXPENSES */}
+            <h3 style={{ color: "#dc2626", marginTop: 20 }}>Expenses</h3>
+            <div style={{ width: "100%", height: 250 }}>
+              <ResponsiveContainer>
+                <PieChart>
+                  <Pie data={expenseData} dataKey="value" nameKey="name" outerRadius={100} label>
+                    {expenseData.map((_, i) => (
+                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+
           </div>
         )}
       </div>
