@@ -24,9 +24,9 @@ export default function Home() {
   const router = useRouter();
 
   const [user, setUser] = useState<any>(null);
-  const [loadingAuth, setLoadingAuth] = useState(true);
-
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+
+  const [loadingAuth, setLoadingAuth] = useState(true);
   const [loadingData, setLoadingData] = useState(false);
 
   const [title, setTitle] = useState("");
@@ -34,7 +34,6 @@ export default function Home() {
   const [category, setCategory] = useState("Food");
   const [type, setType] = useState<"income" | "expense">("expense");
 
-  const [customCategory, setCustomCategory] = useState("");
   const [categories, setCategories] = useState([
     "Food",
     "Transport",
@@ -44,272 +43,253 @@ export default function Home() {
     "Other",
   ]);
 
+  const [customCategory, setCustomCategory] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
 
-  const COLORS = ["#FF4D4D", "#4DA6FF", "#4DFF88", "#FFB84D", "#B84DFF"];
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const [colorPicker, setColorPicker] = useState<string | null>(null);
+
+  // CATEGORY COLORS (CUSTOMIZABLE)
+  const [categoryColors, setCategoryColors] = useState<Record<string, string>>(
+    {}
+  );
+
+  const DEFAULT_COLORS = [
+    "#FF4D4D",
+    "#4DA6FF",
+    "#4DFF88",
+    "#FFB84D",
+    "#B84DFF",
+    "#00C2FF",
+    "#FF66C4",
+  ];
 
   // ================= AUTH =================
   useEffect(() => {
-    let mounted = true;
-
-    const initAuth = async () => {
+    const init = async () => {
       const { data } = await supabase.auth.getSession();
-
-      if (!mounted) return;
-
       setUser(data.session?.user ?? null);
       setLoadingAuth(false);
     };
 
-    initAuth();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!mounted) return;
-      setUser(session?.user ?? null);
-    });
-
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
+    init();
   }, []);
 
   // ================= FETCH =================
   useEffect(() => {
     if (!user) return;
-    fetchTransactions();
+
+    const fetchData = async () => {
+      setLoadingData(true);
+
+      const { data } = await supabase
+        .from("transactions")
+        .select("*")
+        .eq("user_id", user.id);
+
+      setTransactions(data ?? []);
+      setLoadingData(false);
+    };
+
+    fetchData();
   }, [user]);
 
-  async function fetchTransactions() {
-    setLoadingData(true);
-
-    const { data } = await supabase
-      .from("transactions")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
-
-    setTransactions(data ?? []);
-    setLoadingData(false);
+  // ================= COLORS =================
+  function getColor(category: string, index: number) {
+    return categoryColors[category] || DEFAULT_COLORS[index % DEFAULT_COLORS.length];
   }
 
-  // ================= LOGOUT =================
-  async function logout() {
-    await supabase.auth.signOut();
-    router.replace("/login");
+  function setCategoryColor(cat: string, color: string) {
+    setCategoryColors((prev) => ({
+      ...prev,
+      [cat]: color,
+    }));
   }
 
-  // ================= ADD / EDIT =================
-  async function addTransaction() {
-    if (!title.trim() || !amount.trim()) return;
-
-    const amountNumber = Number(amount);
-    if (Number.isNaN(amountNumber)) return;
-
-    if (editingId !== null) {
-      const { data } = await supabase
-        .from("transactions")
-        .update({ title, amount: amountNumber, category, type })
-        .eq("id", editingId)
-        .eq("user_id", user.id)
-        .select();
-
-      if (data?.[0]) {
-        setTransactions((prev) =>
-          prev.map((t) => (t.id === editingId ? data[0] : t))
-        );
-      }
-
-      setEditingId(null);
-    } else {
-      const { data } = await supabase
-        .from("transactions")
-        .insert([{ title, amount: amountNumber, category, type, user_id: user.id }])
-        .select();
-
-      if (data?.[0]) {
-        setTransactions((prev) => [data[0], ...prev]);
-      }
-    }
-
-    setTitle("");
-    setAmount("");
-    setCategory("Food");
-    setType("expense");
-  }
-
-  // ================= DELETE =================
-  async function deleteTransaction(id: number) {
-    await supabase
-      .from("transactions")
-      .delete()
-      .eq("id", id)
-      .eq("user_id", user.id);
-
-    setTransactions((prev) => prev.filter((t) => t.id !== id));
-  }
-
-  function editTransaction(t: Transaction) {
-    setTitle(t.title);
-    setAmount(t.amount.toString());
-    setCategory(t.category);
-    setType(t.type);
-    setEditingId(t.id);
-  }
-
-  function addCategory() {
-    if (!customCategory.trim()) return;
-    setCategories((p) => [...p, customCategory]);
-    setCustomCategory("");
-  }
-
-  // ================= LOADING =================
-  if (loadingAuth) return <main>Loading session...</main>;
-  if (!user) return null;
-
-  // ================= CALCULATIONS =================
-  const income = transactions
-    .filter((t) => t.type === "income")
-    .reduce((s, t) => s + t.amount, 0);
-
-  const expenses = transactions
-    .filter((t) => t.type === "expense")
-    .reduce((s, t) => s + t.amount, 0);
-
-  const balance = income - expenses;
-
+  // ================= DATA =================
   const expenseData = Object.values(
     transactions.reduce((acc, t) => {
       if (t.type !== "expense") return acc;
 
-      if (!acc[t.category]) acc[t.category] = { name: t.category, value: 0 };
+      if (!acc[t.category]) {
+        acc[t.category] = { name: t.category, value: 0 };
+      }
 
       acc[t.category].value += t.amount;
+
       return acc;
     }, {} as Record<string, { name: string; value: number }>)
   );
 
-  // ================= UI =================
+  // ================= CHART CUSTOM LABEL =================
+  const renderLabel = (entry: any) => {
+    return entry.name; // ONLY CATEGORY shown on pie
+  };
+
+  // ================= ADD =================
+  async function addTransaction() {
+    if (!title.trim() || !amount.trim()) return;
+
+    const amountNum = Number(amount);
+
+    const { data } = await supabase
+      .from("transactions")
+      .insert([
+        {
+          title,
+          amount: amountNum,
+          category,
+          type,
+          user_id: user.id,
+        },
+      ])
+      .select();
+
+    if (data?.[0]) {
+      setTransactions((p) => [data[0], ...p]);
+    }
+
+    setTitle("");
+    setAmount("");
+  }
+
+  // ================= DELETE =================
+  async function deleteTransaction(id: number) {
+    await supabase.from("transactions").delete().eq("id", id);
+    setTransactions((p) => p.filter((t) => t.id !== id));
+  }
+
+  if (loadingAuth) return <div>Loading...</div>;
+  if (!user) return null;
+
   return (
-    <main style={{ height: "100vh", display: "flex", flexDirection: "column", fontFamily: "Arial" }}>
+    <main style={{ display: "flex", height: "100vh", fontFamily: "Arial" }}>
 
-      {/* ================= HEADER (FIXED) ================= */}
-      <div style={{
-        padding: 20,
-        borderBottom: "1px solid #ddd",
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center"
-      }}>
-        <h2>Finance Tracker</h2>
+      {/* LEFT: ANALYTICS */}
+      <div style={{ width: 420, borderRight: "1px solid #ddd", padding: 20 }}>
 
-        <div style={{ display: "flex", gap: 10 }}>
-          <span>{user.email}</span>
-          <button onClick={logout}>Logout</button>
-        </div>
-      </div>
+        <h2>Expenses</h2>
 
-      {/* ================= BODY ================= */}
-      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+        <div style={{ position: "relative" }}>
 
-        {/* LEFT SIDE - ANALYTICS */}
-        <div style={{
-          width: 400,
-          borderRight: "1px solid #ddd",
-          padding: 20,
-          overflow: "hidden"
-        }}>
+          {/* 3 DOT MENU (GLOBAL FOR CHART) */}
+          <div
+            style={{
+              position: "absolute",
+              right: 10,
+              top: 10,
+              cursor: "pointer",
+            }}
+            onClick={() => setOpenMenu(openMenu ? null : "main")}
+          >
+            ⋮
+          </div>
 
-          <h3>Overview</h3>
-          <p>Balance: ₱{balance}</p>
-          <p>Income: ₱{income}</p>
-          <p>Expenses: ₱{expenses}</p>
+          {openMenu && (
+            <div
+              style={{
+                position: "absolute",
+                right: 10,
+                top: 30,
+                background: "white",
+                border: "1px solid #ddd",
+                padding: 10,
+                zIndex: 10,
+              }}
+            >
+              <button onClick={() => setColorPicker("open")}>
+                Change Colors
+              </button>
+            </div>
+          )}
 
-          <h3 style={{ marginTop: 20 }}>Expenses</h3>
+          {colorPicker && (
+            <div
+              style={{
+                position: "fixed",
+                top: "40%",
+                left: "40%",
+                background: "white",
+                padding: 20,
+                border: "1px solid #ccc",
+              }}
+            >
+              <h4>Pick Category Colors</h4>
 
-          <div style={{ height: 250 }}>
+              {expenseData.map((d, i) => (
+                <div key={d.name} style={{ marginBottom: 10 }}>
+                  <span>{d.name}</span>
+                  <input
+                    type="color"
+                    value={categoryColors[d.name] || DEFAULT_COLORS[i]}
+                    onChange={(e) => setCategoryColor(d.name, e.target.value)}
+                  />
+                </div>
+              ))}
+
+              <button onClick={() => setColorPicker(null)}>Close</button>
+            </div>
+          )}
+
+          <div style={{ width: "100%", height: 300 }}>
             <ResponsiveContainer>
               <PieChart>
                 <Pie
                   data={expenseData}
                   dataKey="value"
                   nameKey="name"
-                  outerRadius={100}
-                  label
+                  label={renderLabel} // CATEGORY ONLY
+                  outerRadius={110}
                 >
-                  {expenseData.map((_, i) => (
-                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                  {expenseData.map((entry, i) => (
+                    <Cell
+                      key={entry.name}
+                      fill={getColor(entry.name, i)}
+                    />
                   ))}
                 </Pie>
-                <Tooltip />
+
+                {/* ONLY SHOW AMOUNT ON HOVER */}
+                <Tooltip formatter={(value: any) => [`₱${value}`, "Amount"]} />
               </PieChart>
             </ResponsiveContainer>
           </div>
-
         </div>
+      </div>
 
-        {/* RIGHT SIDE - TRANSACTIONS (SCROLLABLE) */}
-        <div style={{
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden"
-        }}>
+      {/* RIGHT: TRANSACTIONS */}
+      <div style={{ flex: 1, padding: 20, overflowY: "auto" }}>
 
-          {/* ADD TRANSACTION */}
-          <div style={{ padding: 20, borderBottom: "1px solid #ddd" }}>
-            <input placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
-            <input placeholder="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        <h2>Add Transaction</h2>
 
-            <select value={type} onChange={(e) => setType(e.target.value as any)}>
-              <option value="expense">Expense</option>
-              <option value="income">Income</option>
-            </select>
+        <input placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
+        <input placeholder="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
 
-            <select value={category} onChange={(e) => setCategory(e.target.value)}>
-              {categories.map((c) => <option key={c}>{c}</option>)}
-            </select>
+        <select value={type} onChange={(e) => setType(e.target.value as any)}>
+          <option value="expense">Expense</option>
+          <option value="income">Income</option>
+        </select>
 
-            <button onClick={addTransaction}>
-              {editingId ? "Save Edit" : "Add"}
-            </button>
+        <select value={category} onChange={(e) => setCategory(e.target.value)}>
+          {categories.map((c) => (
+            <option key={c}>{c}</option>
+          ))}
+        </select>
 
-            <div style={{ marginTop: 10 }}>
-              <input
-                placeholder="New category"
-                value={customCategory}
-                onChange={(e) => setCustomCategory(e.target.value)}
-              />
-              <button onClick={addCategory}>Add Category</button>
-            </div>
+        <button onClick={addTransaction}>Add</button>
+
+        <hr style={{ margin: "20px 0" }} />
+
+        <h2>History</h2>
+
+        {transactions.map((t) => (
+          <div key={t.id} style={{ marginBottom: 10 }}>
+            <b>{t.title}</b>
+            <p>₱{t.amount} ({t.category})</p>
+
+            <button onClick={() => deleteTransaction(t.id)}>Delete</button>
           </div>
-
-          {/* TRANSACTION LIST (SCROLL ONLY HERE) */}
-          <div style={{
-            flex: 1,
-            overflowY: "auto",
-            padding: 20
-          }}>
-            {loadingData && <p>Loading...</p>}
-
-            {transactions.map((t) => (
-              <div key={t.id} style={{ marginBottom: 10 }}>
-                <strong>{t.title}</strong>
-                <p style={{ color: t.type === "income" ? "green" : "red" }}>
-                  ₱{t.amount} ({t.category})
-                </p>
-
-                <button onClick={() => editTransaction(t)}>Edit</button>
-                <button onClick={() => deleteTransaction(t.id)} style={{ color: "red" }}>
-                  Delete
-                </button>
-              </div>
-            ))}
-          </div>
-
-        </div>
+        ))}
       </div>
     </main>
   );
