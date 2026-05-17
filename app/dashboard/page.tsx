@@ -49,7 +49,28 @@ export default function Home() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
 
-  const COLORS = ["#FF4D4D", "#4DA6FF", "#4DFF88", "#FFB84D", "#B84DFF"];
+  // =====================
+  // 🎨 CHART CUSTOMIZATION STATE
+  // =====================
+  const [incomeColors, setIncomeColors] = useState([
+    "#4DA6FF",
+    "#4DFF88",
+    "#FFB84D",
+    "#B84DFF",
+  ]);
+
+  const [expenseColors, setExpenseColors] = useState([
+    "#FF4D4D",
+    "#FF884D",
+    "#FF4DB8",
+    "#FFB84D",
+  ]);
+
+  const [activeMenu, setActiveMenu] = useState<null | "income" | "expense">(null);
+  const [colorPicker, setColorPicker] = useState<{
+    type: "income" | "expense";
+    index: number;
+  } | null>(null);
 
   // =====================
   // AUTH
@@ -168,16 +189,8 @@ export default function Home() {
     setType("expense");
   }
 
-  // =====================
-  // DELETE
-  // =====================
   async function deleteTransaction(id: number) {
-    await supabase
-      .from("transactions")
-      .delete()
-      .eq("id", id)
-      .eq("user_id", user.id);
-
+    await supabase.from("transactions").delete().eq("id", id).eq("user_id", user.id);
     setTransactions((prev) => prev.filter((t) => t.id !== id));
   }
 
@@ -189,43 +202,13 @@ export default function Home() {
     setEditingId(t.id);
   }
 
-  function addCategory() {
-    if (!customCategory.trim()) return;
-    setCategories((prev) => [...prev, customCategory]);
-    setCustomCategory("");
-  }
-
   // =====================
-  // LOADING GUARD
+  // DATA SPLIT
   // =====================
-  if (loadingAuth) return <main>Loading session...</main>;
-  if (!user) return null;
-
-  // =====================
-  // CALCULATIONS
-  // =====================
-  const income = transactions
-    .filter((t) => t.type === "income")
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  const expenses = transactions
-    .filter((t) => t.type === "expense")
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  const balance = income - expenses;
-
-  // =====================
-  // 🔥 SEPARATED CHART DATA (NEW)
-  // =====================
-
   const incomeData = Object.values(
     transactions.reduce((acc, t) => {
       if (t.type !== "income") return acc;
-
-      if (!acc[t.category]) {
-        acc[t.category] = { name: t.category, value: 0 };
-      }
-
+      if (!acc[t.category]) acc[t.category] = { name: t.category, value: 0 };
       acc[t.category].value += Number(t.amount);
       return acc;
     }, {} as Record<string, { name: string; value: number }>)
@@ -234,128 +217,145 @@ export default function Home() {
   const expenseData = Object.values(
     transactions.reduce((acc, t) => {
       if (t.type !== "expense") return acc;
-
-      if (!acc[t.category]) {
-        acc[t.category] = { name: t.category, value: 0 };
-      }
-
+      if (!acc[t.category]) acc[t.category] = { name: t.category, value: 0 };
       acc[t.category].value += Number(t.amount);
       return acc;
     }, {} as Record<string, { name: string; value: number }>)
   );
 
   // =====================
-  // UI
+  // COLORS UPDATE HELPERS
   // =====================
+  function updateColor(
+    type: "income" | "expense",
+    index: number,
+    color: string
+  ) {
+    if (type === "income") {
+      setIncomeColors((prev) => prev.map((c, i) => (i === index ? color : c)));
+    } else {
+      setExpenseColors((prev) => prev.map((c, i) => (i === index ? color : c)));
+    }
+  }
+
+  // =====================
+  // GUARD
+  // =====================
+  if (loadingAuth) return <main>Loading session...</main>;
+  if (!user) return null;
+
+  const income = transactions.filter((t) => t.type === "income").reduce((a, b) => a + b.amount, 0);
+  const expenses = transactions.filter((t) => t.type === "expense").reduce((a, b) => a + b.amount, 0);
+  const balance = income - expenses;
+
   return (
     <main style={{ padding: 30, fontFamily: "Arial" }}>
       <div style={{ display: "flex", justifyContent: "space-between" }}>
         <h1>Finance Tracker</h1>
-
         <div style={{ display: "flex", gap: 10 }}>
           <p>{user.email}</p>
           <button onClick={logout}>Logout</button>
-          <button onClick={() => setFullscreen((p) => !p)}>
-            {fullscreen ? "Exit Focus" : "Focus Mode"}
-          </button>
         </div>
       </div>
 
-      <div style={{ marginTop: 20, padding: 15, border: "1px solid #ddd" }}>
-        <h2>Overview</h2>
-        <p>💰 Balance: ₱{balance}</p>
-        <p style={{ color: "green" }}>📈 Income: ₱{income}</p>
-        <p style={{ color: "red" }}>📉 Expenses: ₱{expenses}</p>
+      {/* ===================== */}
+      {/* OVERVIEW */}
+      {/* ===================== */}
+      <div style={{ marginTop: 20 }}>
+        <p>Balance: ₱{balance}</p>
+        <p>Income: ₱{income}</p>
+        <p>Expenses: ₱{expenses}</p>
       </div>
 
-      <div style={{ display: "flex", gap: 20, marginTop: 20, flexDirection: fullscreen ? "column" : "row" }}>
-        
-        {/* LEFT */}
-        <div style={{ flex: fullscreen ? 1 : 2 }}>
-          <div>
-            <input
-              placeholder="New category"
-              value={customCategory}
-              onChange={(e) => setCustomCategory(e.target.value)}
-            />
-            <button onClick={addCategory}>Add</button>
-          </div>
+      {/* ===================== */}
+      {/* CHARTS */}
+      {/* ===================== */}
+      <div style={{ display: "flex", gap: 40, marginTop: 30 }}>
 
-          <div style={{ marginTop: 10 }}>
-            <input placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
-            <input placeholder="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        {/* INCOME */}
+        <div
+          style={{ width: "50%", position: "relative" }}
+          onMouseEnter={() => setActiveMenu("income")}
+          onMouseLeave={() => setActiveMenu(null)}
+        >
+          <h3>Income</h3>
 
-            <select value={type} onChange={(e) => setType(e.target.value as any)}>
-              <option value="expense">Expense</option>
-              <option value="income">Income</option>
-            </select>
+          {activeMenu === "income" && (
+            <div style={{ position: "absolute", right: 0, top: 0 }}>
+              <button onClick={() => setColorPicker({ type: "income", index: 0 })}>
+                ⋮
+              </button>
+            </div>
+          )}
 
-            <select value={category} onChange={(e) => setCategory(e.target.value)}>
-              {categories.map((c) => (
-                <option key={c}>{c}</option>
-              ))}
-            </select>
-
-            <button onClick={addTransaction}>
-              {editingId ? "Save Edit" : "Add"}
-            </button>
-          </div>
-
-          <div style={{ marginTop: 20 }}>
-            {transactions.map((t) => (
-              <div key={t.id} style={{ marginBottom: 10 }}>
-                <strong>{t.title}</strong>
-                <p style={{ color: t.type === "income" ? "green" : "red" }}>
-                  ₱{t.amount} ({t.category})
-                </p>
-
-                <button onClick={() => editTransaction(t)}>Edit</button>
-                <button onClick={() => deleteTransaction(t.id)} style={{ color: "red" }}>
-                  Delete
-                </button>
-              </div>
-            ))}
-          </div>
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie data={incomeData} dataKey="value" nameKey="name" label>
+                {incomeData.map((_, i) => (
+                  <Cell key={i} fill={incomeColors[i % incomeColors.length]} />
+                ))}
+              </Pie>
+              <Tooltip />
+            </PieChart>
+          </ResponsiveContainer>
         </div>
 
-        {/* RIGHT - TWO PIE CHARTS */}
-        {!fullscreen && (
-          <div style={{ flex: 1, borderLeft: "1px solid #ddd", paddingLeft: 20 }}>
-            <h2>Analytics</h2>
+        {/* EXPENSE */}
+        <div
+          style={{ width: "50%", position: "relative" }}
+          onMouseEnter={() => setActiveMenu("expense")}
+          onMouseLeave={() => setActiveMenu(null)}
+        >
+          <h3>Expenses</h3>
 
-            {/* INCOME */}
-            <h3 style={{ color: "#16a34a" }}>Income</h3>
-            <div style={{ width: "100%", height: 250 }}>
-              <ResponsiveContainer>
-                <PieChart>
-                  <Pie data={incomeData} dataKey="value" nameKey="name" outerRadius={100} label>
-                    {incomeData.map((_, i) => (
-                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
+          {activeMenu === "expense" && (
+            <div style={{ position: "absolute", right: 0, top: 0 }}>
+              <button onClick={() => setColorPicker({ type: "expense", index: 0 })}>
+                ⋮
+              </button>
             </div>
+          )}
 
-            {/* EXPENSES */}
-            <h3 style={{ color: "#dc2626", marginTop: 20 }}>Expenses</h3>
-            <div style={{ width: "100%", height: 250 }}>
-              <ResponsiveContainer>
-                <PieChart>
-                  <Pie data={expenseData} dataKey="value" nameKey="name" outerRadius={100} label>
-                    {expenseData.map((_, i) => (
-                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-
-          </div>
-        )}
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie data={expenseData} dataKey="value" nameKey="name" label>
+                {expenseData.map((_, i) => (
+                  <Cell key={i} fill={expenseColors[i % expenseColors.length]} />
+                ))}
+              </Pie>
+              <Tooltip />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
       </div>
+
+      {/* ===================== */}
+      {/* COLOR PICKER POPUP */}
+      {/* ===================== */}
+      {colorPicker && (
+        <div
+          style={{
+            position: "fixed",
+            top: "40%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            background: "white",
+            padding: 20,
+            border: "1px solid #ccc",
+          }}
+        >
+          <h3>Pick Color</h3>
+
+          <input
+            type="color"
+            onChange={(e) =>
+              updateColor(colorPicker.type, colorPicker.index, e.target.value)
+            }
+          />
+
+          <button onClick={() => setColorPicker(null)}>Close</button>
+        </div>
+      )}
     </main>
   );
 }
