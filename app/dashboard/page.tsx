@@ -48,7 +48,18 @@ export default function Home() {
 
   const [editingId, setEditingId] = useState<number | null>(null);
 
-  const COLORS = ["#FF4D4D", "#4DA6FF", "#4DFF88", "#FFB84D", "#B84DFF"];
+  const COLORS = [
+    "#FF4D4D",
+    "#4DA6FF",
+    "#4DFF88",
+    "#FFB84D",
+    "#B84DFF",
+    "#FF66B2",
+    "#00C2A8",
+    "#FFD93D",
+    "#6C63FF",
+    "#FF8C42",
+  ];
 
   // =====================
   // AUTH
@@ -190,6 +201,9 @@ export default function Home() {
 
   function addCategory() {
     if (!customCategory.trim()) return;
+
+    if (categories.includes(customCategory)) return;
+
     setCategories((prev) => [...prev, customCategory]);
     setCustomCategory("");
   }
@@ -240,51 +254,121 @@ export default function Home() {
   );
 
   // =====================
+  // LABELS
+  // =====================
+  const renderCustomizedLabel = ({
+    name,
+    percent,
+    cx,
+    cy,
+    midAngle,
+    innerRadius,
+    outerRadius,
+  }: any) => {
+    if (percent < 0.05) return null;
+
+    const RADIAN = Math.PI / 180;
+    const radius = innerRadius + (outerRadius - innerRadius) * 1.2;
+
+    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+    return (
+      <text
+        x={x}
+        y={y}
+        fill="#333"
+        textAnchor={x > cx ? "start" : "end"}
+        dominantBaseline="central"
+        fontSize={12}
+      >
+        {name}
+      </text>
+    );
+  };
+
+  // =====================
   // UI
   // =====================
   return (
-    <main style={{ padding: 30, fontFamily: "Arial" }}>
-
+    <main
+      style={{
+        padding: 30,
+        fontFamily: "Arial",
+        height: "100vh",
+        overflow: "hidden",
+      }}
+    >
       {/* HEADER */}
-      <div style={{ display: "flex", justifyContent: "space-between" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          marginBottom: 20,
+        }}
+      >
         <h1>Finance Tracker</h1>
 
-        <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <p>{user.email}</p>
           <button onClick={logout}>Logout</button>
         </div>
       </div>
 
       {/* MAIN LAYOUT */}
-      <div style={{ display: "flex", gap: 20, marginTop: 20 }}>
-
+      <div
+        style={{
+          display: "flex",
+          gap: 20,
+          height: "calc(100vh - 100px)",
+        }}
+      >
         {/* LEFT SIDE */}
-        <div style={{ flex: 2 }}>
-
-          {/* STICKY ADD CARD */}
+        <div
+          style={{
+            flex: 2,
+            display: "flex",
+            flexDirection: "column",
+            gap: 20,
+            minHeight: 0,
+          }}
+        >
+          {/* ADD TRANSACTION CARD */}
           <div
             style={{
-              position: "sticky",
-              top: 20,
-              background: "white",
               border: "1px solid #ddd",
-              padding: 15,
               borderRadius: 10,
-              zIndex: 10,
+              padding: 15,
+              background: "white",
+              flexShrink: 0,
             }}
           >
             <h3>Add Transaction</h3>
 
-            <div>
+            {/* ADD CATEGORY */}
+            <div style={{ marginBottom: 10 }}>
               <input
                 placeholder="New category"
                 value={customCategory}
                 onChange={(e) => setCustomCategory(e.target.value)}
               />
-              <button onClick={addCategory}>Add</button>
+
+              <button
+                onClick={addCategory}
+                style={{ marginLeft: 8 }}
+              >
+                Add Category
+              </button>
             </div>
 
-            <div style={{ marginTop: 10 }}>
+            {/* TRANSACTION INPUTS */}
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                flexWrap: "wrap",
+              }}
+            >
               <input
                 placeholder="Title"
                 value={title}
@@ -297,12 +381,18 @@ export default function Home() {
                 onChange={(e) => setAmount(e.target.value)}
               />
 
-              <select value={type} onChange={(e) => setType(e.target.value as any)}>
+              <select
+                value={type}
+                onChange={(e) => setType(e.target.value as any)}
+              >
                 <option value="expense">Expense</option>
                 <option value="income">Income</option>
               </select>
 
-              <select value={category} onChange={(e) => setCategory(e.target.value)}>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+              >
                 {categories.map((c) => (
                   <option key={c}>{c}</option>
                 ))}
@@ -314,77 +404,197 @@ export default function Home() {
             </div>
           </div>
 
-          {/* SCROLLABLE HISTORY ONLY */}
+          {/* TRANSACTION HISTORY */}
           <div
             style={{
-              marginTop: 20,
-              maxHeight: "65vh",
+              border: "1px solid #ddd",
+              borderRadius: 10,
+              padding: 15,
               overflowY: "auto",
-              paddingRight: 10,
+              flex: 1,
+              minHeight: 0,
             }}
           >
+            <h3>Transaction History</h3>
+
+            {loadingData && <p>Loading transactions...</p>}
+
             {transactions.map((t) => (
-              <div key={t.id} style={{ marginBottom: 10 }}>
+              <div
+                key={t.id}
+                style={{
+                  marginBottom: 12,
+                  paddingBottom: 12,
+                  borderBottom: "1px solid #eee",
+                }}
+              >
                 <strong>{t.title}</strong>
-                <p style={{ color: t.type === "income" ? "green" : "red" }}>
+
+                <p
+                  style={{
+                    color: t.type === "income" ? "green" : "red",
+                    marginTop: 4,
+                    marginBottom: 8,
+                  }}
+                >
                   ₱{t.amount} ({t.category})
                 </p>
 
-                <button onClick={() => editTransaction(t)}>Edit</button>
-                <button
-                  onClick={() => deleteTransaction(t.id)}
-                  style={{ color: "red" }}
-                >
-                  Delete
-                </button>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button onClick={() => editTransaction(t)}>
+                    Edit
+                  </button>
+
+                  <button
+                    onClick={() => deleteTransaction(t.id)}
+                    style={{ color: "red" }}
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         </div>
 
         {/* RIGHT SIDE */}
-        <div style={{ flex: 1, borderLeft: "1px solid #ddd", paddingLeft: 20 }}>
-
+        <div
+          style={{
+            flex: 1,
+            borderLeft: "1px solid #ddd",
+            paddingLeft: 20,
+            overflowY: "auto",
+          }}
+        >
           {/* OVERVIEW */}
-          <div style={{ marginBottom: 20 }}>
+          <div
+            style={{
+              border: "1px solid #ddd",
+              borderRadius: 10,
+              padding: 15,
+              marginBottom: 20,
+            }}
+          >
             <h2>Overview</h2>
+
             <p>💰 Balance: ₱{balance}</p>
-            <p style={{ color: "green" }}>📈 Income: ₱{income}</p>
-            <p style={{ color: "red" }}>📉 Expenses: ₱{expenses}</p>
+
+            <p style={{ color: "green" }}>
+              📈 Income: ₱{income}
+            </p>
+
+            <p style={{ color: "red" }}>
+              📉 Expenses: ₱{expenses}
+            </p>
           </div>
 
           {/* INCOME CHART */}
-          <h3>Income</h3>
-          <div style={{ width: "100%", height: 250 }}>
-            <ResponsiveContainer>
-              <PieChart>
-                <Pie data={incomeData} dataKey="value" nameKey="name" outerRadius={100} label>
-                  {incomeData.map((_, i) => (
-                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+          <div
+            style={{
+              border: "1px solid #ddd",
+              borderRadius: 10,
+              padding: 15,
+              marginBottom: 20,
+            }}
+          >
+            <h3 style={{ color: "green" }}>Income</h3>
+
+            <div style={{ width: "100%", height: 280 }}>
+              <ResponsiveContainer>
+                <PieChart>
+                  <Pie
+                    data={incomeData}
+                    dataKey="value"
+                    nameKey="name"
+                    outerRadius={100}
+                    labelLine={true}
+                    label={renderCustomizedLabel}
+                  >
+                    {incomeData.map((entry, i) => {
+                      const categoryIndex = categories.indexOf(entry.name);
+
+                      return (
+                        <Cell
+                          key={i}
+                          fill={
+                            COLORS[
+                              categoryIndex >= 0
+                                ? categoryIndex % COLORS.length
+                                : i % COLORS.length
+                            ]
+                          }
+                        />
+                      );
+                    })}
+                  </Pie>
+
+                  <Tooltip
+                    formatter={(value: any) => [`₱${value}`, "Amount"]}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
           </div>
 
           {/* EXPENSE CHART */}
-          <h3 style={{ marginTop: 20 }}>Expenses</h3>
-          <div style={{ width: "100%", height: 250 }}>
-            <ResponsiveContainer>
-              <PieChart>
-                <Pie data={expenseData} dataKey="value" nameKey="name" outerRadius={100} label>
-                  {expenseData.map((_, i) => (
-                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+          <div
+            style={{
+              border: "1px solid #ddd",
+              borderRadius: 10,
+              padding: 15,
+            }}
+          >
+            <h3 style={{ color: "red" }}>Expenses</h3>
 
+            <div style={{ width: "100%", height: 280 }}>
+              <ResponsiveContainer>
+                <PieChart>
+                  <Pie
+                    data={expenseData}
+                    dataKey="value"
+                    nameKey="name"
+                    outerRadius={100}
+                    labelLine={true}
+                    label={renderCustomizedLabel}
+                  >
+                    {expenseData.map((entry, i) => {
+                      const categoryIndex = categories.indexOf(entry.name);
+
+                      return (
+                        <Cell
+                          key={i}
+                          fill={
+                            COLORS[
+                              categoryIndex >= 0
+                                ? categoryIndex % COLORS.length
+                                : i % COLORS.length
+                            ]
+                          }
+                        />
+                      );
+                    })}
+                  </Pie>
+
+                  <Tooltip
+                    formatter={(value: any) => [`₱${value}`, "Amount"]}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
         </div>
       </div>
     </main>
   );
 }
+
+// dev notes:
+// unify ui color scheme
+// fix charts so it wont change colors on every render or everytime a new transaction is added (maybe use a fixed color palette and assign colors to categories based on their index in the categories array?)
+// add category management (add, delete, rename categories) - maybe in a separate page or a modal?
+// make edit and delete buttons a little farther from ea other
+// ideate on how to show the charts only for a specific time range (this week, this month, this year, all time) - maybe add a date field to transactions and then filter them based on the selected time range before calculating the data for the charts?
+// ideate on how to show the transaction history in a more compact way so that more transactions can be shown without scrolling too much - maybe a table layout with smaller font size and less padding?
+// ideate on how to make the add/edit transaction form more user friendly - maybe use a modal instead of a sticky card, or at least make the inputs and buttons more visually distinct and easier to interact with?
+// ideate how to make add transaction form support adding multiple transactions at once - maybe allow the user to input multiple lines of transactions in a textarea with a specific format (e.g. title, amount, category, type separated by commas) and then parse and add them all at once when the user submits the form?
+// ideate how to make transaction form less click fatigue - maybe add keyboard shortcuts for adding a transaction (e.g. press Enter to submit the form, press Tab to switch between inputs, etc.)?
